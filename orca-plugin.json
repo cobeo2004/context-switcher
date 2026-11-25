@@ -30,13 +30,13 @@
         "minimum": 0
       },
       {
-        "key": "budgetBytes",
-        "title": "Hand-off budget (bytes)",
-        "description": "Largest hand-off package, in UTF-8 bytes.",
+        "key": "budgetChars",
+        "title": "Hand-off budget (characters)",
+        "description": "Largest hand-off digest, in characters (Orca's plugin limit is 4096)",
         "type": "integer",
-        "default": 32768,
+        "default": 4096,
         "minimum": 1024,
-        "maximum": 32768
+        "maximum": 4096
       }
     ]
   },

@@ -12,8 +12,8 @@ test('context budgets reject an envelope that cannot fit and non-finite values',
   for (const budget of [512, 0, 1, NaN, Infinity, -Infinity]) {
     assert.throws(() => buildFromTurns(turns, { ...opts, budget }), (error) => error instanceof RangeError)
   }
-  assert.ok(buildFromTurns(turns, opts).bytes <= 1024)
-  assert.ok(buildFromTurns(turns, { ...opts, budget: 100000 }).bytes <= 32768)
+  assert.ok(buildFromTurns(turns, opts).text.length <= 1024)
+  assert.ok(buildFromTurns(turns, { ...opts, budget: 100000 }).text.length <= 4096)
 })
 
 test('stored context rejects a budget smaller than its envelope', () => {

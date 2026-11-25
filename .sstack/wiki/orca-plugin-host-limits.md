@@ -1,7 +1,7 @@
 ---
 summary: Orca 1.4.272 plugin host limits that shape hand-off delivery: 4096-char text cap, lost launch prompts, resume readiness
 paths: src/worker.ts, orca-plugin.json
-updated: 3083ef0
+updated: 217a803
 ---
 
 # Orca plugin host limits (measured 2026-11-26, Orca 1.4.272)

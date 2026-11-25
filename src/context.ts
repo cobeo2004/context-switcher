@@ -13,6 +13,8 @@ type CountedText = (selected: number, omitted: number) => string
 
 const utf8 = new TextEncoder()
 const byteLength = (s: string) => utf8.encode(s).length
+const envelopeRemaining = (n: number, budget: number, header: CountedText, footer: CountedText) =>
+  budget - header(n, n).length - footer(n, n).length - 4
 
 function pathsOf(t: RenderableTurn): string[] {
   if (!t.paths) return []
@@ -39,11 +41,11 @@ export function renderTurn(t: RenderableTurn): string {
 export function selectTurns(turns: readonly RenderableTurn[], budget: number, header: CountedText, footer: CountedText): number[] {
   const n = turns.length
   // selected + omitted = n, so n for both counters is the widest either can render.
-  let remaining = budget - byteLength(header(n, n)) - byteLength(footer(n, n)) - 4 // two blank-line joins
+  let remaining = envelopeRemaining(n, budget, header, footer)
   const selected = new Set<number>()
   const tryAdd = (i: number) => {
     if (i < 0 || selected.has(i)) return
-    const cost = byteLength(renderTurn(turns[i])) + 1 // + the joining newline
+    const cost = renderTurn(turns[i]).length + 1 // + the joining newline
     if (cost > remaining) return
     selected.add(i)
     remaining -= cost
@@ -56,11 +58,39 @@ export function selectTurns(turns: readonly RenderableTurn[], budget: number, he
   return [...selected].sort((a, b) => a - b)
 }
 
-export function threadReadCommand(threadId: string): string {
-  return `node ~/.context-switcher/bin/thread-read.mjs ${threadId} --after 0 --limit 50`
+const EXCERPT_MIN = 120 // §0.3 rule E: below this much room an excerpt is not worth carrying
+type Excerpt = { index: number; head: string; tail: string; cut: number }
+const renderExcerpt = (text: string, e: Excerpt) =>
+  `User (excerpt: ${text.length} chars, cut ${e.cut}; full text via the command below): ${e.head}\n[… ${e.cut} chars cut …]\n${e.tail}`
+
+export function planDigest(turns: readonly RenderableTurn[], budget: number, header: CountedText, footer: CountedText): { picked: number[]; excerpt?: Excerpt } {
+  const index = turns.map((t) => t.kind).lastIndexOf('user')
+  const remaining = envelopeRemaining(turns.length, budget, header, footer)
+  const fallback = () => ({ picked: selectTurns(turns, budget, header, footer) })
+  if (index < 0 || renderTurn(turns[index]).length + 1 <= remaining) return fallback()
+  const text = turns[index].text
+  const excerptBudget = Math.floor(0.6 * remaining)
+  let cut = text.length
+  let excerpt: Excerpt = { index, head: '', tail: '', cut }
+  for (;;) {
+    const room = excerptBudget - renderExcerpt(text, { ...excerpt, head: '', tail: '' }).length - 1
+    if (room < EXCERPT_MIN) return fallback()
+    let headEnd = Math.ceil(2 * room / 3)
+    let tailStart = text.length - (room - headEnd)
+    if (/[\uD800-\uDBFF]/.test(text[headEnd - 1]) && /[\uDC00-\uDFFF]/.test(text[headEnd])) headEnd--
+    if (/[\uD800-\uDBFF]/.test(text[tailStart - 1]) && /[\uDC00-\uDFFF]/.test(text[tailStart])) tailStart++
+    excerpt = { index, head: text.slice(0, headEnd), tail: text.slice(tailStart), cut: text.length - headEnd - (text.length - tailStart) }
+    if (String(excerpt.cut).length === String(cut).length) break
+    cut = excerpt.cut
+  }
+  return { picked: selectTurns(turns, budget - renderExcerpt(text, excerpt).length - 1, header, footer), excerpt }
 }
 
-interface PackageMeta { threadId: string; handoffId: string; sourceAgent: string; mode: 'full' | 'delta'; lossy: boolean }
+export function threadReadCommand(handoffId: string): string {
+  return `node ~/.context-switcher/bin/thread-read.mjs --handoff ${handoffId}`
+}
+
+interface PackageMeta { threadId: string; handoffId: string; sourceAgent: string; mode: 'full' | 'delta'; lossy: boolean; unavailable?: boolean; omittedLines?: number }
 
 /** §0.3 text. */
 function headerFor(m: PackageMeta): CountedText {
@@ -72,12 +102,12 @@ function headerFor(m: PackageMeta): CountedText {
 }
 function footerFor(m: PackageMeta): CountedText {
   return (_selected, omitted) =>
-    `Omitted ${omitted} turns. Read them with: ${threadReadCommand(m.threadId)}\n` +
+    (m.lossy ? `Omitted ${m.omittedLines ?? 0} earlier screen lines; screen captures are not stored.\n` : m.unavailable ? `Omitted ${omitted} turns; the history database is unavailable, so they cannot be read back.\n` : `Omitted ${omitted} turns. Read them with: ${threadReadCommand(m.handoffId)}\n`) +
     'Summarise where we are in 3 lines, then wait for the user.'
 }
 
-export function renderPackage(turns: readonly RenderableTurn[], selected: readonly number[], m: PackageMeta): string {
-  const body = selected.map((i) => renderTurn(turns[i])).join('\n')
+export function renderPackage(turns: readonly RenderableTurn[], selected: readonly number[], m: PackageMeta, excerpt?: Excerpt): string {
+  const body = [...selected, ...(excerpt ? [excerpt.index] : [])].sort((a, b) => a - b).map((i) => excerpt?.index === i ? renderExcerpt(turns[i].text, excerpt) : renderTurn(turns[i])).join('\n')
   return [headerFor(m)(selected.length, turns.length - selected.length), body, footerFor(m)(selected.length, turns.length - selected.length)]
     .filter(Boolean)
     .join('\n\n')
@@ -88,23 +118,24 @@ function assemble(
   budget: number,
   m: PackageMeta
 ): ContextPackage {
-  if (!Number.isFinite(budget)) throw new RangeError('Context budget must be finite')
+  if (!Number.isFinite(budget) || budget < 1024) throw new RangeError('Context budget must be finite and at least 1024')
   const cap = Math.min(budget, HARD_CAP)
-  const picked = selectTurns(turns, cap, headerFor(m), footerFor(m))
-  const text = renderPackage(turns, picked, m)
-  if (byteLength(text) > cap) throw new RangeError('Context budget is too small for the envelope')
+  const { picked, excerpt } = planDigest(turns, cap, headerFor(m), footerFor(m))
+  const text = renderPackage(turns, picked, m, excerpt)
+  if (text.length > cap) throw new RangeError('Context budget is too small for the envelope')
   const ords = picked.map((i) => turns[i].ord).filter((o): o is number => o !== undefined)
   return {
     text,
     bytes: byteLength(text),
     mode: m.mode,
     selectedTurnIds: m.lossy ? [] : picked.map((i) => turns[i].id).filter((id): id is number => id !== undefined),
+    omittedTurnIds: m.lossy ? [] : turns.filter((_, i) => !picked.includes(i)).map((t) => t.id).filter((id): id is number => id !== undefined),
     selected: picked.length,
     omitted: turns.length - picked.length,
     coveredFromOrd: ords.length ? Math.min(...ords) : null,
     coveredToOrd: ords.length ? Math.max(...ords) : null,
     lossy: m.lossy,
-    threadReadCommand: threadReadCommand(m.threadId)
+    threadReadCommand: m.lossy || m.unavailable ? '' : threadReadCommand(m.handoffId)
   }
 }
 
@@ -126,5 +157,26 @@ export function buildFromTurns(
   turns: readonly CanonicalTurn[],
   opts: { threadId: string; handoffId: string; sourceAgent: string; budget: number; lossy: boolean }
 ): ContextPackage {
-  return assemble(turns.filter((t) => !t.handoffId), opts.budget, { ...opts, mode: 'full' })
+  const eligible = turns.filter((t) => !t.handoffId)
+  const meta: PackageMeta = { ...opts, mode: 'full', unavailable: !opts.lossy }
+  // §0.3 lossy: a screen capture is one assistant turn. Fit any single input turn (including a
+  // one-liner) and any assistant capture; a lone user turn beside a filtered hand-off is not a capture.
+  if (opts.lossy && eligible.length === 1 && (turns.length === 1 || eligible[0].kind === 'assistant')) {
+    // §0.3 lossy: keep the newest m lines that fit. Rendered length grows with m, so binary-search it.
+    const lines = eligible[0].text.split('\n')
+    const newest = (m: number) => ({ ...eligible[0], text: `Screen capture: newest ${m} of ${lines.length} lines\n${lines.slice(lines.length - m).join('\n')}` })
+    const fits = (m: number) => {
+      const captureMeta = { ...meta, omittedLines: lines.length - m }
+      return selectTurns([newest(m)], Math.min(opts.budget, HARD_CAP), headerFor(captureMeta), footerFor(captureMeta)).length === 1
+    }
+    let lo = 0
+    let hi = lines.length
+    while (lo < hi) {
+      const mid = Math.ceil((lo + hi) / 2)
+      if (fits(mid)) lo = mid
+      else hi = mid - 1
+    }
+    return lo ? assemble([newest(lo)], opts.budget, { ...meta, omittedLines: lines.length - lo }) : assemble([], opts.budget, { ...meta, omittedLines: lines.length })
+  }
+  return assemble(eligible, opts.budget, meta)
 }
