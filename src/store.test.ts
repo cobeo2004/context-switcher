@@ -36,7 +36,7 @@ function ingest(s: Store, agent: string, nativeId: string, turns: CanonicalTurn[
 }
 function pkg(selectedTurnIds: number[], over: Partial<ContextPackage> = {}): ContextPackage {
   return {
-    text: 'pkg', bytes: 3, mode: 'full', selectedTurnIds, selected: selectedTurnIds.length, omitted: 0,
+    text: 'pkg', bytes: 3, mode: 'full', selectedTurnIds, omittedTurnIds: [], selected: selectedTurnIds.length, omitted: 0,
     coveredFromOrd: null, coveredToOrd: null, lossy: false, threadReadCommand: 'node x', ...over
   }
 }
@@ -63,11 +63,11 @@ const texts = (rows: { text: string }[]) => rows.map((r) => r.text).sort()
 test('migrates from 0, re-open is idempotent, newer user_version is refused', () => {
   const path = join(tmp(), 'context.sqlite')
   const a = openStore(path)
-  assert.equal(a.userVersion(), 1)
+  assert.equal(a.userVersion(), 2)
   a.close()
   const b = openStore(path)
-  assert.equal(b.userVersion(), 1)
-  b.db.exec('PRAGMA user_version = 2')
+  assert.equal(b.userVersion(), 2)
+  b.db.exec('PRAGMA user_version = 3')
   b.close()
   assert.throws(() => openStore(path), /newer/)
 })
