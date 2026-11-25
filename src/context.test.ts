@@ -40,11 +40,11 @@ const input = (threadId: string, budget = 32768, sessionId?: number) =>
 
 // ---- Budget ----
 
-test('60 turns of ~120 KB fit in 32 KB with first user, last assistant and an honest omitted count', () => {
+test('60 turns of ~120 KB fit in 4096 chars with first user, last assistant and an honest omitted count', () => {
   const s = fresh()
   const { threadId } = longThread(s)
   const pkg = buildContext(s, input(threadId!))
-  assert.ok(pkg.bytes <= HARD_CAP, String(pkg.bytes))
+  assert.ok(pkg.text.length <= HARD_CAP, String(pkg.text.length))
   assert.equal(pkg.bytes, bytes(pkg.text))
   assert.ok(pkg.text.includes('FIRST-REQ'))
   assert.ok(pkg.text.includes('LAST-ASSIST'))
@@ -55,12 +55,12 @@ test('60 turns of ~120 KB fit in 32 KB with first user, last assistant and an ho
   assert.ok(pkg.text.includes(`(thread ${threadId}, ${pkg.selected} turns, full)`))
 })
 
-test('budget is clamped to 32 KB and a 1024-byte budget is respected', () => {
+test('budget is clamped to 4096 chars and a 1024-char budget is respected', () => {
   const s = fresh()
   const { threadId } = longThread(s)
-  assert.ok(buildContext(s, input(threadId!, 1_000_000)).bytes <= HARD_CAP)
+  assert.ok(buildContext(s, input(threadId!, 1_000_000)).text.length <= HARD_CAP)
   const small = buildContext(s, input(threadId!, 1024))
-  assert.ok(small.bytes <= 1024, String(small.bytes))
+  assert.ok(small.text.length <= 1024, String(small.text.length))
   assert.equal(small.selected, 0)
   assert.equal(small.omitted, 60)
 })
@@ -71,7 +71,7 @@ test('an oversized turn is skipped, never truncated', () => {
   const pkg = buildContext(s, input(threadId!))
   assert.ok(!pkg.text.includes('OVERSIZED'))
   assert.ok(!pkg.text.includes('xxxxxxxxxx'))
-  assert.ok(pkg.bytes <= HARD_CAP)
+  assert.ok(pkg.text.length <= HARD_CAP)
 })
 
 test('selectTurns follows T3 order: last user, last assistant, first user, then newest back', () => {
@@ -128,10 +128,10 @@ test('header and footer verbatim, lossy line when lossy, selectedTurnIds match t
     'Tool: Grep',
     'Assistant: done',
     '',
-    `Omitted 0 turns. Read them with: node ~/.context-switcher/bin/thread-read.mjs ${thread} --after 0 --limit 50`,
+    `Omitted 0 turns. Read them with: node ~/.context-switcher/bin/thread-read.mjs --handoff ${H2}`,
     'Summarise where we are in 3 lines, then wait for the user.'
   ].join('\n'))
-  assert.equal(pkg.threadReadCommand, `node ~/.context-switcher/bin/thread-read.mjs ${thread} --after 0 --limit 50`)
+  assert.equal(pkg.threadReadCommand, `node ~/.context-switcher/bin/thread-read.mjs --handoff ${H2}`)
   assert.deepEqual(pkg.selectedTurnIds, s.eligibleTurns(thread).map((x) => x.id))
   assert.deepEqual([pkg.coveredFromOrd, pkg.coveredToOrd], [1, 4])
 

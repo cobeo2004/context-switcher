@@ -80,9 +80,11 @@ export interface ContextTarget { agent: string; sessionId?: number }   // sessio
 export interface BuildContextInput { threadId: string; target: ContextTarget; budget: number; purpose: 'switch' | 'delegate'; handoffId: string }
 export interface ContextPackage {
   text: string            // exactly what is delivered
-  bytes: number           // Buffer.byteLength(text, 'utf8') ≤ min(budget, 32768)
+  bytes: number           // Buffer.byteLength(text, 'utf8')
   mode: 'full' | 'delta'
   selectedTurnIds: number[]   // DB turn ids carried (→ handoff_turns); [] for lossy
+  // ponytail: optional until PR2b updates existing package fixtures and persistence.
+  omittedTurnIds?: number[]
   selected: number
   omitted: number
   coveredFromOrd: number | null
@@ -90,10 +92,9 @@ export interface ContextPackage {
   lossy: boolean
   threadReadCommand: string
 }
-export const HARD_CAP = 32768
+export const HARD_CAP = 4096
 export const DRAFT_TTL_MS = 10 * 60_000
 export const PENDING_SWEEP_MS = 10 * 60_000     // pending older than this ⇒ unconfirmed
-export const MARKER_SCAN_USER_RECORDS = 5
 /** First line: `[context-switcher handoff h_<uuid> thread t_<uuid>]`. Must not start with '<': the Claude and Codex adapters drop user text starting with '<' as injected. */
 export const HANDOFF_MARKER = '[context-switcher handoff '
 export const MARKER_RE = /\[context-switcher handoff (h_[0-9a-f-]{36}) thread (t_[0-9a-f-]{36})\]/
