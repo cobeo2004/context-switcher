@@ -1,0 +1,8 @@
+# sstack project config. The gate reads `verify` from the base branch (main).
+# Plugin commands run with a throwaway HOME so tests never touch ~/.context-switcher.
+verify = [
+  "orca plugin validate . --json",
+  "H=$(mktemp -d) && HOME=$H orca plugin test .",
+  "H=$(mktemp -d) && HOME=$H orca plugin check . --json",
+  "npx -y -p typescript@5.9 tsc -p . --noEmit",
+]
