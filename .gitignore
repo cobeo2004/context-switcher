@@ -111,3 +111,10 @@ dist
 
 # TernJS port file
 .tern-port
+
+# context-switcher
+node_modules/
+.orca/
+.omc/
+.sstack/runs/
+.sstack/local/

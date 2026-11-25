@@ -1,0 +1,54 @@
+{
+  "manifestVersion": 2,
+  "id": "context-switcher",
+  "name": "Context Switcher",
+  "version": "0.1.0",
+  "description": "Hand a conversation from one coding agent to another, carrying the context forward.",
+  "engines": {
+    "orca": ">=1.4.272"
+  },
+  "execution": "trusted-worker",
+  "pluginApi": 1,
+  "main": "src/worker.ts",
+  "contributes": {
+    "panels": [
+      {
+        "id": "switch",
+        "title": "Context Switcher",
+        "icon": "agent",
+        "entry": "src/panel.tsx",
+        "ui": "components"
+      }
+    ],
+    "settings": [
+      {
+        "key": "retentionDays",
+        "title": "Retention (days)",
+        "description": "Threads untouched for this many days are deleted when the worker starts. 0 keeps them forever.",
+        "type": "integer",
+        "default": 90,
+        "minimum": 0
+      },
+      {
+        "key": "budgetBytes",
+        "title": "Hand-off budget (bytes)",
+        "description": "Largest hand-off package, in UTF-8 bytes.",
+        "type": "integer",
+        "default": 32768,
+        "minimum": 1024,
+        "maximum": 32768
+      }
+    ]
+  },
+  "capabilities": [
+    { "kind": "agent:read" },
+    { "kind": "agent:launch" },
+    { "kind": "terminal:read" },
+    { "kind": "terminal:send" },
+    { "kind": "workspace:read" },
+    { "kind": "workspace:write" },
+    { "kind": "notifications:show" },
+    { "kind": "settings:own" },
+    { "kind": "storage:own" }
+  ]
+}
