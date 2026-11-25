@@ -1,7 +1,7 @@
 ---
 summary: Why the hand-off delta uses per-hand-off coverage, not an ord watermark; store file locations and modes
 paths: src/store.ts, src/context.ts, src/cliSource.ts, src/types.ts
-updated: 3083ef0
+updated: 217a803
 ---
 
 # Context store
@@ -13,7 +13,9 @@ The SQLite store lives at `~/.context-switcher/context.sqlite` (dir 0700, DB and
 - So each hand-off records exactly which turns it carried (`handoff_turns`). The delta for target session S is every active conversation turn not authored by S and not carried by a *delivered* hand-off to S (`eligibleTurns` in `src/store.ts`). Turns from failed / unconfirmed hand-offs, and omitted turns, stay eligible.
 
 ## Package bounds
-- `buildFromTurns` / `buildContext` never return more than `min(budget, 32768)` UTF-8 bytes; a budget smaller than the header + footer throws `RangeError`. The real delivery cap is lower — see [orca-plugin-host-limits](orca-plugin-host-limits.md) (4096 chars per send).
+- The hand-off package is a digest of at most `min(budgetChars, 4096)` characters, counted with `String.length` (UTF-16 code units, the unit Orca's host checks); `bytes` still records the UTF-8 size. A budget smaller than the header + footer throws `RangeError`. Why 4096: [orca-plugin-host-limits](orca-plugin-host-limits.md).
+- `selectTurns` keeps whole turns only. The one exception is rule E in `planDigest`: an oversized **last user turn** is carried as a marked head + tail excerpt, and its id stays in `omittedTurnIds` so `thread-read --handoff <id>` prints it whole.
+- Lossy screen captures (one captured turn, nothing stored) keep their newest whole lines; when not even one line fits, the capture is dropped and the footer still counts the omitted lines honestly.
 
 ## Native ids
 - Never use content-addressed ids (Cursor blob sha256) as `native_id`: identical messages would collapse. Use position (DAG parent + index), Pi `entryId#index`.
