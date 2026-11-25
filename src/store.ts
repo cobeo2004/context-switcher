@@ -13,9 +13,9 @@ import {
   type TurnRow
 } from './types'
 
-export const SCHEMA_VERSION = 1
+export const SCHEMA_VERSION = 2
 
-const MIGRATION_1 = `
+export const MIGRATION_1 = `
 CREATE TABLE threads (
   id         TEXT PRIMARY KEY,
   created_at INTEGER NOT NULL,
@@ -87,8 +87,17 @@ CREATE INDEX handoffs_target    ON handoffs(target_session_id, status);
 CREATE INDEX handoff_turns_turn ON handoff_turns(turn_id);
 `
 
+// §0.2: ADD COLUMN instead of a table rebuild (SQLite cannot alter a CHECK). Existing rows: chars 0, in_input 0, carried 1.
+const MIGRATION_2 = `
+ALTER TABLE handoffs      ADD COLUMN chars    INTEGER NOT NULL DEFAULT 0 CHECK (chars <= 4096);
+ALTER TABLE handoffs      ADD COLUMN in_input INTEGER NOT NULL DEFAULT 0 CHECK (in_input IN (0, 1));
+ALTER TABLE handoff_turns ADD COLUMN carried  INTEGER NOT NULL DEFAULT 1 CHECK (carried IN (0, 1));
+`
+
 /** A turn row plus the agent of the session that produced it. */
 export type StoredTurn = TurnRow & { agent: string }
+/** A covered turn of one hand-off: 1 carried whole, 0 omitted or excerpted. */
+export type CoveredTurn = StoredTurn & { carried: 0 | 1 }
 
 export interface IngestContext { workspaceId: string | null; terminalId?: string | null; sourcePath?: string | null }
 export interface IngestResult { sessionId: number | null; threadId: string | null; inserted: number; warnings: string[] }
@@ -129,6 +138,7 @@ export function openStore(path: string) {
     throw new Error(`context-switcher: database ${path} has user_version ${version}, newer than this plugin understands (${SCHEMA_VERSION})`)
   }
   if (version < 1) tx(() => db.exec(`${MIGRATION_1}\nPRAGMA user_version = 1;`))
+  if (version < 2) tx(() => db.exec(`${MIGRATION_2}\nPRAGMA user_version = 2;`))
 
   const q = {
     session: db.prepare('SELECT * FROM sessions WHERE agent = ? AND native_id = ?'),
@@ -143,7 +153,7 @@ export function openStore(path: string) {
        workspace_id = COALESCE(workspace_id, ?), updated_at = ? WHERE id = ?`
     ),
     deliver: db.prepare(
-      "UPDATE handoffs SET status = 'delivered', target_session_id = ?, package = NULL, error = NULL, updated_at = ? WHERE id = ?"
+      "UPDATE handoffs SET status = 'delivered', target_session_id = ?, package = NULL, error = NULL, in_input = 0, updated_at = ? WHERE id = ?"
     ),
     upsertTurn: db.prepare(
       `INSERT INTO turns (thread_id, session_id, ord, native_id, kind, text, paths, tool, source, handoff_id, active, at)
@@ -156,9 +166,12 @@ export function openStore(path: string) {
     reconcile: db.prepare(
       'UPDATE turns SET active = CASE WHEN native_id IN (SELECT value FROM json_each(?)) THEN 1 ELSE 0 END WHERE session_id = ?'
     ),
-    // The exact text is kept only while it may still be sent (§0.5).
+    // The exact text is kept only while it may still be sent (§0.5); in_input only qualifies pending/unconfirmed.
     status: db.prepare(
-      "UPDATE handoffs SET status = ?1, error = ?2, updated_at = ?3, package = CASE WHEN ?1 IN ('draft','pending') THEN package ELSE NULL END WHERE id = ?4"
+      `UPDATE handoffs SET status = ?1, error = ?2, updated_at = ?3,
+         package = CASE WHEN ?1 IN ('draft','pending') THEN package ELSE NULL END,
+         in_input = CASE WHEN ?1 IN ('pending','unconfirmed') THEN in_input ELSE 0 END
+       WHERE id = ?4`
     )
   }
 
@@ -235,16 +248,17 @@ export function openStore(path: string) {
     tx(() => {
       db.prepare(
         `INSERT INTO handoffs (id, thread_id, source_session_id, source_agent, target_agent, target_session_id, target_terminal_id,
-           workspace_id, strategy, mode, covered_from_ord, covered_to_ord, selected, omitted, bytes, lossy, package, status,
+           workspace_id, strategy, mode, covered_from_ord, covered_to_ord, selected, omitted, bytes, chars, lossy, package, status,
            expires_at, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?)`
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?)`
       ).run(
         row.id, row.thread_id, row.source_session_id, row.source_agent, row.target_agent, row.target_session_id, row.target_terminal_id,
         row.workspace_id, row.strategy, pkg.mode, pkg.coveredFromOrd, pkg.coveredToOrd, pkg.selected, pkg.omitted, pkg.bytes,
-        pkg.lossy ? 1 : 0, pkg.lossy ? null : pkg.text, now + DRAFT_TTL_MS, now, now
+        pkg.text.length, pkg.lossy ? 1 : 0, pkg.lossy ? null : pkg.text, now + DRAFT_TTL_MS, now, now
       )
-      const link = db.prepare('INSERT INTO handoff_turns (handoff_id, turn_id) VALUES (?, ?)')
-      for (const turnId of pkg.selectedTurnIds) link.run(row.id, turnId)
+      const link = db.prepare('INSERT INTO handoff_turns (handoff_id, turn_id, carried) VALUES (?, ?, ?)')
+      for (const turnId of pkg.selectedTurnIds) link.run(row.id, turnId, 1)
+      for (const turnId of pkg.omittedTurnIds) link.run(row.id, turnId, 0)
       q.touchThread.run(now, row.thread_id)
     })
   }
@@ -263,6 +277,13 @@ export function openStore(path: string) {
 
   function setHandoffStatus(id: string, status: HandoffStatus, error: string | null = null, now = Date.now()): void {
     q.status.run(status, error, now, id)
+  }
+
+  /** §0.6 L.4: the text reached the target's input but was not submitted. Only a pending/unconfirmed row qualifies. */
+  function setInInput(id: string, now = Date.now()): boolean {
+    return Number(db.prepare(
+      "UPDATE handoffs SET in_input = 1, updated_at = ? WHERE id = ? AND status IN ('pending','unconfirmed')"
+    ).run(now, id).changes) === 1
   }
 
   /** §0.5 sweep: stale pending → unconfirmed, expired drafts → expired. Returns what changed. */
@@ -289,7 +310,7 @@ export function openStore(path: string) {
       `SELECT t.*, s.agent FROM turns t JOIN sessions s ON s.id = t.session_id
        WHERE t.thread_id = ? AND t.source = 'conversation' AND t.active = 1 AND t.session_id <> ?
          AND t.id NOT IN (SELECT ht.turn_id FROM handoff_turns ht JOIN handoffs h ON h.id = ht.handoff_id
-                          WHERE h.target_session_id = ? AND h.status = 'delivered')
+                          WHERE h.target_session_id = ? AND h.status = 'delivered' AND ht.carried = 1)
        ORDER BY t.ord`
     ).all(threadId, targetSessionId, targetSessionId) as StoredTurn[]
   }
@@ -299,6 +320,14 @@ export function openStore(path: string) {
       `SELECT t.*, s.agent FROM turns t JOIN sessions s ON s.id = t.session_id
        WHERE t.thread_id = ? AND t.ord > ? ORDER BY t.ord LIMIT ?`
     ).all(threadId, after, limit) as StoredTurn[]
+  }
+
+  /** `thread-read --handoff`: the omitted/excerpted turns (default) or every covered turn (`full`), in ord order. */
+  function coveredFor(handoffId: string, opts: { full?: boolean } = {}): CoveredTurn[] {
+    return db.prepare(
+      `SELECT t.*, s.agent, ht.carried FROM handoff_turns ht JOIN turns t ON t.id = ht.turn_id JOIN sessions s ON s.id = t.session_id
+       WHERE ht.handoff_id = ? AND (? OR ht.carried = 0) ORDER BY t.ord`
+    ).all(handoffId, opts.full ? 1 : 0) as CoveredTurn[]
   }
 
   function targetSessionFor(threadId: string, agent: string): SessionRow | null {
@@ -316,8 +345,8 @@ export function openStore(path: string) {
   }
 
   return {
-    db, path, userVersion, ingestParse, createDraft, claimDraft, setHandoffStatus, sweep,
-    eligibleTurns, threadTurns, targetSessionFor, prune,
+    db, path, userVersion, ingestParse, createDraft, claimDraft, setHandoffStatus, setInInput, sweep,
+    eligibleTurns, threadTurns, coveredFor, targetSessionFor, prune,
     close: () => db.close()
   }
 }

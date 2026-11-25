@@ -83,8 +83,7 @@ export interface ContextPackage {
   bytes: number           // Buffer.byteLength(text, 'utf8')
   mode: 'full' | 'delta'
   selectedTurnIds: number[]   // DB turn ids carried (→ handoff_turns); [] for lossy
-  // ponytail: optional until PR2b updates existing package fixtures and persistence.
-  omittedTurnIds?: number[]
+  omittedTurnIds: number[]    // eligible ids not carried whole (skipped, or excerpted by rule E) → handoff_turns carried = 0; [] for lossy
   selected: number
   omitted: number
   coveredFromOrd: number | null

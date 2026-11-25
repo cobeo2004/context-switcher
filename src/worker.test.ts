@@ -12,7 +12,7 @@ test('diag reports schema version, file modes and the installed CLI', async () =
   try {
     const worker = await mountWorker(main, { host: mockHost({ settings: { retentionDays: 90, budgetBytes: 32768 } }) })
     const diag = await worker.request('diag')
-    assert.equal(diag.userVersion, 1)
+    assert.equal(diag.userVersion, 2)
     assert.equal(diag.dirMode, '700')
     assert.equal(diag.dbMode, '600')
     assert.equal(diag.cliInstalled, true)
