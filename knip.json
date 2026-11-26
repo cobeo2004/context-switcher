@@ -3,6 +3,6 @@
   "entry": ["src/worker.ts", "src/panel.tsx", "src/protocol.ts", "src/panel.check.ts", "src/**/*.test.{ts,tsx}", "scripts/*.mjs"],
   "project": ["src/**/*.{ts,tsx}", "scripts/*.mjs"],
   "ignoreExportsUsedInFile": true,
-  "ignoreDependencies": ["^orca(/.*)?$", "@stryker-mutator/core"],
+  "ignoreDependencies": ["^orca(/.*)?$", "@stryker-mutator/command-runner"],
   "ignoreBinaries": ["orca", "uvx"]
 }

@@ -16,7 +16,8 @@
     "orca:release": "orca plugin release-entry . --json",
     "scan": "bash scripts/scan.sh all",
     "verify:code": "npm run -s types && npm run -s lint && npm run -s format:check && npm run -s typecheck && npm run -s knip && npm run -s semgrep && npm run -s gate:fixtures && npm run -s orca:validate && npm run -s orca:test && npm run -s orca:check && npm run -s orca:release",
-    "verify": "npm run -s verify:code && npm run -s scan"
+    "verify": "npm run -s verify:code && npm run -s scan",
+    "mutation": "node node_modules/@stryker-mutator/core/bin/stryker.js run stryker.config.json"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
