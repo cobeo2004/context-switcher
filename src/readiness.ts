@@ -7,6 +7,7 @@ export interface ReadinessProfile {
   tailLines: number
   timeoutMs: number
   landMs: number // rule L landing/submission window (F6), used by deliver
+  submitKey?: string // F4: sent as its own sendText after the text, for an editor that keeps a multi-line paste
   idle: RegExp // required: the masked input-ready prompt
   busy: RegExp | null
   blockers: readonly RegExp[]
@@ -86,7 +87,7 @@ const RESUME_TIMEOUT_MS = 45_000 // max(45 s, 2 × slowest resume 4.3 s), for th
 export const PROFILES: Readonly<Record<string, ReadinessProfile>> = {
   claude: { ...base, idle: /^─{10,}\n❯(?:\s[^\n]*)?\n─{10,}$/mu, busy: /^\S a+… \(0+a/mu }, // F11 spinner `✻ Thinking… (3s)`
   codex: { ...base, idle: /^› [^\n]*\n {2}\? a+ a+$/mu, busy: null },
-  pi: { ...base, idle: /^─{10,}\n─{10,}$/mu, busy: null } // F7: empty editor between two rules
+  pi: { ...base, idle: /^─{10,}\n─{10,}$/mu, busy: null, submitKey: '\r' } // F7: empty editor between two rules
 }
 
 /** `null` for an agent P2 did not record: it is not a `sendText` target. */
