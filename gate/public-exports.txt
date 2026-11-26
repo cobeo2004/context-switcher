@@ -1,4 +1,3 @@
 Adapter
-MARKER_RE
 ThreadRow
 UnsupportedFormat
