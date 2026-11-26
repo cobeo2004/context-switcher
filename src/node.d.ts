@@ -21,6 +21,7 @@ declare module 'node:fs' {
   export function existsSync(path: string): boolean
   export function mkdirSync(path: string, options?: { recursive?: boolean; mode?: number }): string | undefined
   export function mkdtempSync(prefix: string): string
+  export function rmSync(path: string, options?: { recursive?: boolean; force?: boolean }): void
   export function statSync(path: string): { mode: number; size: number; dev: number; ino: number; mtimeMs: number }
   export function writeFileSync(path: string, data: string | Uint8Array, options?: { mode?: number }): void
 }
