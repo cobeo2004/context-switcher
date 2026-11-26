@@ -148,12 +148,10 @@ function footerFor(m: PackageMeta): CountedText {
 }
 
 export function renderPackage(turns: readonly RenderableTurn[], selected: readonly number[], m: PackageMeta, excerpt?: Excerpt): string {
-  const body = [...selected, ...(excerpt ? [excerpt.index] : [])]
-    .sort((a, b) => a - b)
-    .flatMap((i) => {
-      const turn = turns[i]
-      return turn ? [excerpt?.index === i ? renderExcerpt(turn.text, excerpt) : renderTurn(turn)] : []
-    })
+  const shown = new Set(excerpt ? [...selected, excerpt.index] : selected)
+  const body = [...turns.entries()]
+    .filter(([i]) => shown.has(i))
+    .map(([i, turn]) => (excerpt?.index === i ? renderExcerpt(turn.text, excerpt) : renderTurn(turn)))
     .join('\n')
   return [
     headerFor(m)(selected.length, turns.length - selected.length),
@@ -164,24 +162,23 @@ export function renderPackage(turns: readonly RenderableTurn[], selected: readon
     .join('\n\n')
 }
 
+const idsOf = (ts: readonly { id?: TurnId }[]) => ts.flatMap((t) => (t.id === undefined ? [] : [t.id]))
+
 function assemble(turns: readonly (RenderableTurn & { id?: TurnId; ord?: number })[], budget: number, m: PackageMeta): ContextPackage {
   if (!Number.isFinite(budget) || budget < 1024) throw new RangeError('Context budget must be finite and at least 1024')
   const cap = Math.min(budget, HARD_CAP)
   const { picked, excerpt } = planDigest(turns, cap, headerFor(m), footerFor(m))
   const text = renderPackage(turns, picked, m, excerpt)
   if (text.length > cap) throw new RangeError('Context budget is too small for the envelope')
-  const ords = picked.map((i) => turns[i]?.ord).filter((o): o is number => o !== undefined)
+  const chosen = new Set(picked)
+  const carried = turns.filter((_, i) => chosen.has(i))
+  const ords = carried.flatMap((t) => (t.ord === undefined ? [] : [t.ord]))
   return {
     text,
     bytes: byteLength(text),
     mode: m.mode,
-    selectedTurnIds: m.lossy ? [] : picked.map((i) => turns[i]?.id).filter((id): id is TurnId => id !== undefined),
-    omittedTurnIds: m.lossy
-      ? []
-      : turns
-          .filter((_, i) => !picked.includes(i))
-          .map((t) => t.id)
-          .filter((id): id is TurnId => id !== undefined),
+    selectedTurnIds: m.lossy ? [] : idsOf(carried),
+    omittedTurnIds: m.lossy ? [] : idsOf(turns.filter((_, i) => !chosen.has(i))),
     selected: picked.length,
     omitted: turns.length - picked.length,
     coveredFromOrd: ords.length ? Math.min(...ords) : null,
