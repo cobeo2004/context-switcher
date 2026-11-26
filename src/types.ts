@@ -54,7 +54,7 @@ export interface ParseResult {
   cursor: Cursor
   formatVersion: string // what the adapter matched, stored on the session row
   cwd?: string
-  markers: MarkerHit[] // from the first MARKER_SCAN_USER_RECORDS raw user records, pre-filter
+  markers: MarkerHit[] // from EVERY raw user record this parse read, pre-filter (§0.2 rule 2)
   activeNativeIds?: string[] // pi, cursor: the full active branch; turns not listed become active = 0
 }
 
@@ -187,5 +187,4 @@ export const DRAFT_TTL_MS = 10 * 60_000
 export const PENDING_SWEEP_MS = 10 * 60_000 // pending older than this ⇒ unconfirmed
 /** First line: `[context-switcher handoff h_<uuid> thread t_<uuid>]`. Must not start with '<': the Claude and Codex adapters drop user text starting with '<' as injected. */
 export const HANDOFF_MARKER = '[context-switcher handoff '
-/** @public PR3 adapter contract */
 export const MARKER_RE = /\[context-switcher handoff (h_[0-9a-f-]{36}) thread (t_[0-9a-f-]{36})\]/
