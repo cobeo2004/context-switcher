@@ -1,8 +1,16 @@
 # sstack project config. The gate reads `verify` from the base branch (main).
-# Plugin commands run with a throwaway HOME so tests never touch ~/.context-switcher.
+# `npm run verify` = CI's `verify` job (verify:code) + the zizmor, gitleaks and OSV scans (scripts/scan.sh), same pins.
+# CodeQL and dependency review run on GitHub only.
 verify = [
-  "orca plugin validate . --json",
-  "H=$(mktemp -d) && HOME=$H orca plugin test .",
-  "H=$(mktemp -d) && HOME=$H orca plugin check . --json",
-  "npx -y -p typescript@5.9 tsc -p . --noEmit",
+  "npm ci --ignore-scripts --no-audit --no-fund --prefer-offline",
+  "npm run -s verify",
+]
+check = "[ -d node_modules ] || exit 0; node node_modules/eslint/bin/eslint.js --config eslint.config.mjs --no-warn-ignored --max-warnings 0 {path} && node node_modules/prettier/bin/prettier.cjs --config .prettierrc --check --ignore-unknown {path}"
+# Files that define the gate. Edits need a human; an added file under a glob passes (gate.md), so every tool takes an explicit --config.
+protected = [
+  ".github/**", "scripts/**", "gate/**", "semgrep/**", ".semgrepignore",
+  "eslint.config.mjs", ".prettierrc", ".prettierignore", "knip.json", "tsconfig.json", "stryker.config.json",
+  ".npmrc", "package.json", "package-lock.json", ".gitignore",
+  ".gitattributes", "src/node.d.ts", "orca-plugin.json", "AGENTS.md",
+  "src/*.property.test.ts", "src/context.gaps.test.ts", "src/store.status.test.ts",
 ]

@@ -19,9 +19,7 @@ Nothing stores tool output, file contents or reasoning.
 ## Develop
 
 ```sh
-orca plugin validate . --json
-HOME="$(mktemp -d)" orca plugin test .
-HOME="$(mktemp -d)" orca plugin check . --json   # both start the worker, which writes under $HOME
-npx -y -p typescript@5.9 tsc -p . --noEmit       # src/node.d.ts types the Node built-ins used; no @types/node
+npm ci              # dev tools only; the plugin itself has no runtime dependencies
+npm run verify      # CI's verify job plus the security scans; mutation and CodeQL are separate (see AGENTS.md)
 orca plugin dev watch .
 ```
