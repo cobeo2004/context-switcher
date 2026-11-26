@@ -5,11 +5,15 @@ import { randomUUID } from 'node:crypto'
 import {
   DRAFT_TTL_MS,
   PENDING_SWEEP_MS,
+  assertNever,
   type ContextPackage,
+  type HandoffId,
   type HandoffRow,
   type HandoffStatus,
   type ParseResult,
+  type SessionId,
   type SessionRow,
+  type ThreadId,
   type TurnRow
 } from './types'
 
@@ -105,8 +109,8 @@ export interface IngestContext {
   sourcePath?: string | null
 }
 export interface IngestResult {
-  sessionId: number | null
-  threadId: string | null
+  sessionId: SessionId | null
+  threadId: ThreadId | null
   inserted: number
   warnings: string[]
 }
@@ -203,7 +207,7 @@ export function openStore(path: string) {
   }
 
   /** §0.2 binding rule 3; rule 4 adds the target-session check for an existing session. */
-  function binds(h: HandoffRow | undefined, threadId: string, agent: string, ctx: IngestContext): h is HandoffRow {
+  function binds(h: HandoffRow | undefined, threadId: ThreadId, agent: string, ctx: IngestContext): h is HandoffRow {
     return (
       !!h &&
       (h.status === 'pending' || h.status === 'unconfirmed') &&
@@ -240,10 +244,10 @@ export function openStore(path: string) {
         }
         let threadId = bound?.thread_id
         if (!threadId) {
-          threadId = `t_${randomUUID()}`
+          threadId = `t_${randomUUID()}` as ThreadId
           q.newThread.run(threadId, now, now)
         }
-        const { id } = q.newSession.get(key.agent, key.nativeId, threadId, ctx.workspaceId, now, now) as { id: number }
+        const { id } = q.newSession.get(key.agent, key.nativeId, threadId, ctx.workspaceId, now, now) as { id: SessionId }
         if (bound) q.deliver.run(id, now, bound.id)
         session = q.session.get(key.agent, key.nativeId) as SessionRow
       }
@@ -325,7 +329,7 @@ export function openStore(path: string) {
   }
 
   /** draft → pending exactly once (§0.5), so a double click can't send twice. */
-  function claimDraft(id: string, now = Date.now()): ClaimResult {
+  function claimDraft(id: HandoffId, now = Date.now()): ClaimResult {
     return tx(() => {
       const r = db
         .prepare("UPDATE handoffs SET status = 'pending', updated_at = ? WHERE id = ? AND status = 'draft' AND expires_at > ?")
@@ -333,17 +337,29 @@ export function openStore(path: string) {
       if (Number(r.changes) === 1) return 'claimed'
       const h = q.handoff.get(id) as HandoffRow | undefined
       if (!h) return 'missing'
-      if (h.status === 'draft') q.status.run('expired', null, now, id)
-      return h.status === 'draft' || h.status === 'expired' ? 'expired' : 'already_run'
+      switch (h.status) {
+        case 'draft':
+          q.status.run('expired', null, now, id)
+          return 'expired'
+        case 'expired':
+          return 'expired'
+        case 'pending':
+        case 'delivered':
+        case 'unconfirmed':
+        case 'failed':
+          return 'already_run'
+        default:
+          return assertNever(h)
+      }
     })
   }
 
-  function setHandoffStatus(id: string, status: HandoffStatus, error: string | null = null, now = Date.now()): void {
+  function setHandoffStatus(id: HandoffId, status: HandoffStatus, error: string | null = null, now = Date.now()): void {
     q.status.run(status, error, now, id)
   }
 
   /** §0.6 L.4: the text reached the target's input but was not submitted. Only a pending/unconfirmed row qualifies. */
-  function setInInput(id: string, now = Date.now()): boolean {
+  function setInInput(id: HandoffId, now = Date.now()): boolean {
     return (
       Number(
         db.prepare("UPDATE handoffs SET in_input = 1, updated_at = ? WHERE id = ? AND status IN ('pending','unconfirmed')").run(now, id)
@@ -353,23 +369,23 @@ export function openStore(path: string) {
   }
 
   /** §0.5 sweep: stale pending → unconfirmed, expired drafts → expired. Returns what changed. */
-  function sweep(now = Date.now()): { id: string; status: HandoffStatus }[] {
+  function sweep(now = Date.now()): { id: HandoffId; status: HandoffStatus }[] {
     return tx(() => [
       ...(db
         .prepare(
           "UPDATE handoffs SET status = 'unconfirmed', package = NULL, updated_at = ? WHERE status = 'pending' AND updated_at <= ? RETURNING id, status"
         )
-        .all(now, now - PENDING_SWEEP_MS) as { id: string; status: HandoffStatus }[]),
+        .all(now, now - PENDING_SWEEP_MS) as { id: HandoffId; status: HandoffStatus }[]),
       ...(db
         .prepare(
           "UPDATE handoffs SET status = 'expired', package = NULL, updated_at = ? WHERE status = 'draft' AND expires_at <= ? RETURNING id, status"
         )
-        .all(now, now) as { id: string; status: HandoffStatus }[])
+        .all(now, now) as { id: HandoffId; status: HandoffStatus }[])
     ])
   }
 
   /** §0.2 delta by coverage. No watermark: anything not delivered to the target stays eligible. */
-  function eligibleTurns(threadId: string, targetSessionId?: number): StoredTurn[] {
+  function eligibleTurns(threadId: ThreadId, targetSessionId?: SessionId): StoredTurn[] {
     if (targetSessionId === undefined) {
       return db
         .prepare(
@@ -389,7 +405,7 @@ export function openStore(path: string) {
       .all(threadId, targetSessionId, targetSessionId) as StoredTurn[]
   }
 
-  function threadTurns(threadId: string, after: number, limit: number): StoredTurn[] {
+  function threadTurns(threadId: ThreadId, after: number, limit: number): StoredTurn[] {
     return db
       .prepare(
         `SELECT t.*, s.agent FROM turns t JOIN sessions s ON s.id = t.session_id
@@ -399,7 +415,7 @@ export function openStore(path: string) {
   }
 
   /** `thread-read --handoff`: the omitted/excerpted turns (default) or every covered turn (`full`), in ord order. */
-  function coveredFor(handoffId: string, opts: { full?: boolean } = {}): CoveredTurn[] {
+  function coveredFor(handoffId: HandoffId, opts: { full?: boolean } = {}): CoveredTurn[] {
     return db
       .prepare(
         `SELECT t.*, s.agent, ht.carried FROM handoff_turns ht JOIN turns t ON t.id = ht.turn_id JOIN sessions s ON s.id = t.session_id
@@ -408,7 +424,7 @@ export function openStore(path: string) {
       .all(handoffId, opts.full ? 1 : 0) as CoveredTurn[]
   }
 
-  function targetSessionFor(threadId: string, agent: string): SessionRow | null {
+  function targetSessionFor(threadId: ThreadId, agent: string): SessionRow | null {
     return (
       (db
         .prepare('SELECT * FROM sessions WHERE thread_id = ? AND agent = ? ORDER BY updated_at DESC, id DESC LIMIT 1')

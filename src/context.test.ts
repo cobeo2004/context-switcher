@@ -4,13 +4,17 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { openStore, type Store } from './store'
 import { buildContext, buildFromTurns, renderTurn, selectTurns } from './context'
-import { HANDOFF_MARKER, HARD_CAP, type CanonicalTurn, type ParseResult } from './types'
+import { HANDOFF_MARKER, HARD_CAP, type CanonicalTurn, type HandoffId, type ParseResult, type SessionId, type ThreadId } from './types'
 
-const H1 = 'h_11111111-1111-1111-1111-111111111111'
-const H2 = 'h_22222222-2222-2222-2222-222222222222'
+const H1 = 'h_11111111-1111-1111-1111-111111111111' as HandoffId
+const H2 = 'h_22222222-2222-2222-2222-222222222222' as HandoffId
 const WS = { workspaceId: 'ws1', terminalId: 'term1' }
 const bytes = (s: string) => new TextEncoder().encode(s).length
 const count = (s: string, needle: string) => s.split(needle).length - 1
+function must<T>(value: T | null | undefined): T {
+  assert.ok(value !== null && value !== undefined)
+  return value
+}
 
 function fresh(): Store {
   return openStore(join(mkdtempSync(join(tmpdir(), 'cs-ctx-')), 'context.sqlite'))
@@ -41,9 +45,9 @@ function longThread(s: Store, oversized = false) {
   }
   return s.ingestParse({ agent: 'claude', nativeId: 'A' }, parse(turns), WS)
 }
-const input = (threadId: string, budget = 32768, sessionId?: number) => ({
+const input = (threadId: ThreadId, budget = 32768, sessionId?: SessionId) => ({
   threadId,
-  target: { agent: 'codex', sessionId },
+  target: { agent: 'codex', ...(sessionId === undefined ? {} : { sessionId }) },
   budget,
   purpose: 'switch' as const,
   handoffId: H2
@@ -54,7 +58,8 @@ const input = (threadId: string, budget = 32768, sessionId?: number) => ({
 test('60 turns of ~120 KB fit in 4096 chars with first user, last assistant and an honest omitted count', () => {
   const s = fresh()
   const { threadId } = longThread(s)
-  const pkg = buildContext(s, input(threadId!))
+  const thread = must(threadId)
+  const pkg = buildContext(s, input(thread))
   assert.ok(pkg.text.length <= HARD_CAP, String(pkg.text.length))
   assert.equal(pkg.bytes, bytes(pkg.text))
   assert.ok(pkg.text.includes('FIRST-REQ'))
@@ -69,8 +74,9 @@ test('60 turns of ~120 KB fit in 4096 chars with first user, last assistant and 
 test('budget is clamped to 4096 chars and a 1024-char budget is respected', () => {
   const s = fresh()
   const { threadId } = longThread(s)
-  assert.ok(buildContext(s, input(threadId!, 1_000_000)).text.length <= HARD_CAP)
-  const small = buildContext(s, input(threadId!, 1024))
+  const thread = must(threadId)
+  assert.ok(buildContext(s, input(thread, 1_000_000)).text.length <= HARD_CAP)
+  const small = buildContext(s, input(thread, 1024))
   assert.ok(small.text.length <= 1024, String(small.text.length))
   assert.equal(small.selected, 0)
   assert.equal(small.omitted, 60)
@@ -79,7 +85,8 @@ test('budget is clamped to 4096 chars and a 1024-char budget is respected', () =
 test('an oversized turn is skipped, never truncated', () => {
   const s = fresh()
   const { threadId } = longThread(s, true)
-  const pkg = buildContext(s, input(threadId!))
+  const thread = must(threadId)
+  const pkg = buildContext(s, input(thread))
   assert.ok(!pkg.text.includes('OVERSIZED'))
   assert.ok(!pkg.text.includes('xxxxxxxxxx'))
   assert.ok(pkg.text.length <= HARD_CAP)
@@ -94,7 +101,7 @@ test('selectTurns follows T3 order: last user, last assistant, first user, then 
     { kind: 'user', text: 'u4' },
     { kind: 'command', text: 'c5' }
   ] as const
-  const cost = (i: number) => bytes(renderTurn(turns[i])) + 1
+  const cost = (i: number) => bytes(renderTurn(must(turns[i]))) + 1
   // Room for exactly three turns: u4 (last user), a3 (last assistant), u0 (first user).
   const budget = cost(4) + cost(3) + cost(0) + 4
   assert.deepEqual(
@@ -117,7 +124,7 @@ test("delta back to A holds only B's conversation turns, no hand-off text, no in
     parse([t('a0', 'user', 'SEED-ONLY-1'), t('a1', 'assistant', 'SEED-ONLY-2')]),
     WS
   )
-  const thread = a.threadId!
+  const thread = must(a.threadId)
   const full = buildContext(s, { ...input(thread), handoffId: H1 })
   s.createDraft(
     {
@@ -147,7 +154,8 @@ test("delta back to A holds only B's conversation turns, no hand-off text, no in
     ),
     WS
   )
-  const delta = buildContext(s, { ...input(thread, 32768, a.sessionId!), target: { agent: 'claude', sessionId: a.sessionId! } })
+  const sessionId = must(a.sessionId)
+  const delta = buildContext(s, { ...input(thread, 32768, sessionId), target: { agent: 'claude', sessionId } })
   assert.equal(delta.mode, 'delta')
   assert.ok(delta.text.includes('Assistant: CODEX-NEW-1'))
   assert.ok(delta.text.includes('Command: npm test'))
@@ -171,7 +179,7 @@ test('header and footer verbatim, lossy line when lossy, selectedTurnIds match t
     ]),
     WS
   )
-  const thread = r.threadId!
+  const thread = must(r.threadId)
   const pkg = buildContext(s, input(thread))
   assert.equal(
     pkg.text,

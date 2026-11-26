@@ -4,5 +4,5 @@
   "project": ["src/**/*.{ts,tsx}", "scripts/*.mjs"],
   "ignoreExportsUsedInFile": true,
   "ignoreDependencies": ["^orca(/.*)?$", "@stryker-mutator/core", "fast-check"],
-  "ignoreBinaries": ["orca"]
+  "ignoreBinaries": ["orca", "uvx"]
 }

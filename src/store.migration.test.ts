@@ -4,14 +4,18 @@ import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { MIGRATION_1, openStore, type Store } from './store'
-import type { CanonicalTurn, ContextPackage, ParseResult } from './types'
+import type { CanonicalTurn, ContextPackage, HandoffId, ParseResult, ThreadId, TurnId } from './types'
 
 const T0 = 1_700_000_000_000
-const H1 = 'h_11111111-1111-1111-1111-111111111111'
-const H2 = 'h_22222222-2222-2222-2222-222222222222'
+const H1 = 'h_11111111-1111-1111-1111-111111111111' as HandoffId
+const H2 = 'h_22222222-2222-2222-2222-222222222222' as HandoffId
 const WS = { workspaceId: 'ws1', terminalId: 'term1' }
 
 const tmpPath = () => join(mkdtempSync(join(tmpdir(), 'cs-mig-')), 'context.sqlite')
+function must<T>(value: T | null | undefined): T {
+  assert.ok(value !== null && value !== undefined)
+  return value
+}
 const turn = (nativeId: string, extra: Partial<CanonicalTurn> = {}): CanonicalTurn => ({
   nativeId,
   kind: 'user',
@@ -26,7 +30,7 @@ const parse = (turns: CanonicalTurn[], extra: Partial<ParseResult> = {}): ParseR
   markers: [],
   ...extra
 })
-function pkg(selectedTurnIds: number[], omittedTurnIds: number[], text = 'pkg é'): ContextPackage {
+function pkg(selectedTurnIds: TurnId[], omittedTurnIds: TurnId[], text = 'pkg é'): ContextPackage {
   return {
     text,
     bytes: 0,
@@ -41,7 +45,7 @@ function pkg(selectedTurnIds: number[], omittedTurnIds: number[], text = 'pkg é
     threadReadCommand: 'node x'
   }
 }
-function draft(s: Store, id: string, threadId: string, sel: number[], omit: number[], text?: string) {
+function draft(s: Store, id: HandoffId, threadId: ThreadId, sel: TurnId[], omit: TurnId[], text?: string) {
   s.createDraft(
     {
       id,
@@ -92,7 +96,7 @@ test('upgrade: a PR1 database at user_version 1 gets chars 0, in_input 0, carrie
 
 test('CHECKs: chars 4097, in_input 2 and carried 2 are rejected', () => {
   const s = openStore(tmpPath())
-  const thread = s.ingestParse({ agent: 'claude', nativeId: 'A' }, parse([turn('a#0')]), WS, T0).threadId!
+  const thread = must(s.ingestParse({ agent: 'claude', nativeId: 'A' }, parse([turn('a#0')]), WS, T0).threadId)
   const ins = (chars: number, inIn: number) =>
     s.db
       .prepare(
@@ -103,7 +107,7 @@ test('CHECKs: chars 4097, in_input 2 and carried 2 are rejected', () => {
   assert.throws(() => ins(4097, 0), /CHECK/)
   assert.throws(() => ins(0, 2), /CHECK/)
   ins(4096, 1)
-  const turnId = s.eligibleTurns(thread)[0].id
+  const turnId = must(s.eligibleTurns(thread)[0]).id
   assert.throws(
     () => s.db.prepare("INSERT INTO handoff_turns (handoff_id, turn_id, carried) VALUES ('h_4096_1', ?, 2)").run(turnId),
     /CHECK/
@@ -113,9 +117,9 @@ test('CHECKs: chars 4097, in_input 2 and carried 2 are rejected', () => {
 test("createDraft writes chars and carried 0 rows; omitted turns stay in a delivered target's delta; coveredFor reads them back", () => {
   const s = openStore(tmpPath())
   const a = s.ingestParse({ agent: 'claude', nativeId: 'A' }, parse([turn('A:1'), turn('A:2'), turn('A:3')]), WS, T0)
-  const thread = a.threadId!
+  const thread = must(a.threadId)
   const [a1, a2, a3] = s.eligibleTurns(thread).map((t) => t.id)
-  draft(s, H1, thread, [a1, a3], [a2], 'é😀x')
+  draft(s, H1, thread, [must(a1), must(a3)], [must(a2)], 'é😀x')
   assert.equal((s.db.prepare('SELECT chars FROM handoffs WHERE id = ?').get(H1) as { chars: number }).chars, 4)
   s.claimDraft(H1, T0 + 1)
   const b = s.ingestParse(
@@ -128,7 +132,7 @@ test("createDraft writes chars and carried 0 rows; omitted turns stay in a deliv
   )
   assert.equal(b.threadId, thread)
   assert.deepEqual(
-    s.eligibleTurns(thread, b.sessionId!).map((t) => t.text),
+    s.eligibleTurns(thread, must(b.sessionId)).map((t) => t.text),
     ['A:2']
   )
 
@@ -144,12 +148,12 @@ test("createDraft writes chars and carried 0 rows; omitted turns stay in a deliv
       ['A:3', 1]
     ]
   )
-  assert.deepEqual(s.coveredFor('h_none'), [])
+  assert.deepEqual(s.coveredFor('h_none' as HandoffId), [])
 })
 
 test('in_input: set only while pending/unconfirmed, cleared by delivered/failed/expired', () => {
   const s = openStore(tmpPath())
-  const thread = s.ingestParse({ agent: 'claude', nativeId: 'A' }, parse([turn('a#0')]), WS, T0).threadId!
+  const thread = must(s.ingestParse({ agent: 'claude', nativeId: 'A' }, parse([turn('a#0')]), WS, T0).threadId)
   draft(s, H1, thread, [], [])
   assert.equal(s.setInInput(H1), false) // still a draft
   assert.equal(inInput(s, H1), 0)

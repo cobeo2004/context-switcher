@@ -1,0 +1,86 @@
+rules:
+  - id: cs-no-shell-exec
+    message: Shell-interpreted process call. Use execFile/spawn with an argv array; `shell` may only be `false`.
+    severity: ERROR
+    languages: [typescript]
+    pattern-either:
+      - patterns:
+          - pattern-either:
+              - pattern-inside: "import { ..., exec, ... } from '$M'; ..."
+              - pattern-inside: "import { ..., execSync, ... } from '$M'; ..."
+          - metavariable-regex: { metavariable: $M, regex: '^(node:)?child_process$' }
+          - pattern-either:
+              - pattern: exec(...)
+              - pattern: execSync(...)
+      - patterns:
+          - pattern-inside: "import * as $CP from '$M'; ..."
+          - metavariable-regex: { metavariable: $M, regex: '^(node:)?child_process$' }
+          - pattern-either:
+              - pattern: $CP.exec(...)
+              - pattern: $CP.execSync(...)
+      - patterns:
+          - pattern: "$F(..., { ..., shell: $V, ... })"
+          - pattern-not: "$F(..., { ..., shell: false, ... })"
+  - id: cs-sql-built-by-string
+    message: SQL text built from a value. Use `?` placeholders and pass values to run/get/all. The only allowed interpolation is the two migration calls in src/store.ts openStore.
+    severity: ERROR
+    languages: [typescript]
+    paths: { exclude: ['*.test.ts', '*.test.tsx'] }
+    patterns:
+      - pattern-either:
+          - pattern: $DB.prepare($A + $B)
+          - pattern: $DB.exec($A + $B)
+          - pattern: '$DB.prepare(`...${$X}...`)'
+          - pattern: '$DB.exec(`...${$X}...`)'
+      # The enumerated migration site (src/store.ts openStore). Nothing else may interpolate.
+      - pattern-not: '$DB.exec(`${MIGRATION_1}\nPRAGMA user_version = 1;`)'
+      - pattern-not: '$DB.exec(`${MIGRATION_2}\nPRAGMA user_version = 2;`)'
+  - id: cs-sql-migration-outside-store
+    message: Migration SQL runs only in src/store.ts openStore (the one site cs-sql-built-by-string allows).
+    severity: ERROR
+    languages: [typescript]
+    paths: { exclude: ['/src/store.ts', '*.test.ts', '*.test.tsx'] }
+    pattern-either:
+      - pattern: '$DB.exec(`${MIGRATION_1}...`)'
+      - pattern: '$DB.exec(`${MIGRATION_2}...`)'
+  - id: cs-fs-private-mode
+    message: 'Files and dirs under ~/.context-switcher hold conversation history. Use a literal private mode: writeFileSync { mode: 0o600 or 0o700 }, mkdirSync { mode: 0o700 }, chmodSync 0o600 or 0o700. No options variable, spread or computed key.'
+    severity: ERROR
+    languages: [typescript]
+    paths: { exclude: ['*.test.ts', '*.test.tsx'] }
+    # Semgrep matches object literals loosely (extra keys allowed), so (b) rejects anything that can override `mode`.
+    # A repeated plain `mode:` key fails TypeScript (TS1117) and ESLint no-dupe-keys; using the function as a value fails ESLint no-restricted-syntax.
+    pattern-either:
+      # (a) no literal private mode
+      - patterns:
+          - pattern-either:
+              - pattern: writeFileSync(...)
+              - pattern: mkdirSync(...)
+              - pattern: chmodSync(...)
+              - pattern: $NS.writeFileSync(...)
+              - pattern: $NS.mkdirSync(...)
+              - pattern: $NS.chmodSync(...)
+          - pattern-not: 'writeFileSync($P, $D, { ..., mode: 0o600, ... })'
+          - pattern-not: 'writeFileSync($P, $D, { ..., mode: 0o700, ... })'
+          - pattern-not: 'mkdirSync($P, { ..., mode: 0o700, ... })'
+          - pattern-not: 'chmodSync($P, 0o600)'
+          - pattern-not: 'chmodSync($P, 0o700)'
+          - pattern-not: '$NS.writeFileSync($P, $D, { ..., mode: 0o600, ... })'
+          - pattern-not: '$NS.writeFileSync($P, $D, { ..., mode: 0o700, ... })'
+          - pattern-not: '$NS.mkdirSync($P, { ..., mode: 0o700, ... })'
+          - pattern-not: '$NS.chmodSync($P, 0o600)'
+          - pattern-not: '$NS.chmodSync($P, 0o700)'
+      # (b) a spread or computed key can override mode, whatever its position
+      - pattern: 'writeFileSync($P, $D, {..., ...$S, ...})'
+      - pattern: 'mkdirSync($P, {..., ...$S, ...})'
+      - pattern: 'writeFileSync($P, $D, {..., [$K]: $V, ...})'
+      - pattern: 'mkdirSync($P, {..., [$K]: $V, ...})'
+      - pattern: '$NS.writeFileSync($P, $D, {..., ...$S, ...})'
+      - pattern: '$NS.mkdirSync($P, {..., ...$S, ...})'
+      - pattern: '$NS.writeFileSync($P, $D, {..., [$K]: $V, ...})'
+      - pattern: '$NS.mkdirSync($P, {..., [$K]: $V, ...})'
+  - id: cs-json-parse-cast
+    message: '`JSON.parse(...) as T` trusts the input. Parse to `unknown` and narrow with a guard.'
+    severity: ERROR
+    languages: [typescript]
+    pattern: JSON.parse(...) as $T

@@ -13,6 +13,10 @@ const cli = join(dir, 'thread-read.mjs')
 writeFileSync(cli, THREAD_READ_MJS)
 
 const store = openStore(dbPath)
+function must<T>(value: T | null | undefined): T {
+  assert.ok(value !== null && value !== undefined)
+  return value
+}
 const turns: CanonicalTurn[] = Array.from({ length: 20 }, (_, i) => ({ nativeId: `n${i}`, kind: 'user', text: `turn ${i + 1}`, at: 0 }))
 turns[2] = { nativeId: 'n2', kind: 'file_change', text: '', paths: ['a.ts', 'b.ts'], at: 0 }
 turns[3] = { nativeId: 'n3', kind: 'tool_call', text: '', tool: 'Grep', at: 0 }
@@ -35,7 +39,7 @@ function run(...args: string[]) {
 }
 
 test('pages with --after and --limit and says where to continue', () => {
-  const r = run(threadId!, '--after', '10', '--limit', '5')
+  const r = run(must(threadId), '--after', '10', '--limit', '5')
   assert.equal(r.code, 0, r.err)
   const ords = [...r.out.matchAll(/^#(\d+) /gm)].map((m) => Number(m[1]))
   assert.deepEqual(ords, [11, 12, 13, 14, 15])
@@ -44,7 +48,7 @@ test('pages with --after and --limit and says where to continue', () => {
 })
 
 test('prints paths, tool and inactive markers; no next line at the end', () => {
-  const r = run(threadId!)
+  const r = run(must(threadId))
   assert.equal(r.code, 0, r.err)
   assert.ok(r.out.includes('#3 file_change [claude]: \n  paths: a.ts, b.ts\n'))
   assert.ok(r.out.includes('#4 tool_call [claude]: \n  tool: Grep\n'))
@@ -55,6 +59,6 @@ test('prints paths, tool and inactive markers; no next line at the end', () => {
 test('unknown thread exits 2, bad args exit 64', () => {
   assert.equal(run('t_none').code, 2)
   assert.equal(run().code, 64)
-  assert.equal(run(threadId!, '--limit', 'x').code, 64)
-  assert.equal(run(threadId!, '--bogus').code, 64)
+  assert.equal(run(must(threadId), '--limit', 'x').code, 64)
+  assert.equal(run(must(threadId), '--bogus').code, 64)
 })

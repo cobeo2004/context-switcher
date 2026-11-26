@@ -1,10 +1,16 @@
 import { assert, test } from 'orca/testing'
 import { buildContext, buildFromTurns, planDigest, renderTurn, selectTurns } from './context'
 import type { Store } from './store'
-import type { CanonicalTurn } from './types'
+import type { CanonicalTurn, HandoffId, ThreadId, TurnId } from './types'
 
-const H = 'h_11111111-1111-1111-1111-111111111111'
-const opts = { threadId: 't_11111111-1111-1111-1111-111111111111', handoffId: H, sourceAgent: 'claude', budget: 4096, lossy: false }
+const H = 'h_11111111-1111-1111-1111-111111111111' as HandoffId
+const opts = {
+  threadId: 't_11111111-1111-1111-1111-111111111111' as ThreadId,
+  handoffId: H,
+  sourceAgent: 'claude',
+  budget: 4096,
+  lossy: false
+}
 const turn = (kind: CanonicalTurn['kind'], text: string, i = 0): CanonicalTurn => ({ nativeId: `n${i}`, kind, text, at: 0 })
 const rows = (turns: CanonicalTurn[]) => turns.map((t, i) => ({ ...t, id: i + 1, ord: i + 1, agent: 'claude' }))
 const stored = (turns: CanonicalTurn[], budget = 4096) =>
@@ -17,6 +23,10 @@ const stored = (turns: CanonicalTurn[], budget = 4096) =>
   })
 const LONE = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/
 const none = () => ''
+function must<T>(value: T | null | undefined): T {
+  assert.ok(value !== null && value !== undefined)
+  return value
+}
 
 test('lossy capture retains newest lines at the budget boundary', () => {
   for (let n = 3530; n <= 3560; n++) {
@@ -53,7 +63,7 @@ test('cap is in characters: 2-byte text fills 4096 chars, more than a byte cap w
   assert.ok(pkg.text.length <= 4096, String(pkg.text.length))
   assert.ok(pkg.bytes > 4096, String(pkg.bytes))
   // Char-based expectation: envelope measured from the rendered package, every turn costs the same.
-  const cost = renderTurn(turns[0]).length + 1
+  const cost = renderTurn(must(turns[0])).length + 1
   const body = pkg.selected * cost - 1
   const envelope = pkg.text.length - body - 4
   assert.equal(pkg.selected, Math.floor((4096 - envelope - 4 + 1) / cost))
@@ -89,13 +99,13 @@ test('rule E: an oversized last user turn is excerpted head + tail with the true
   assert.ok(pkg.text.includes('HEAD-MARK'))
   assert.ok(pkg.text.includes('TAIL-MARK'))
   const k = Number(/\[… (\d+) chars cut …\]/.exec(pkg.text)?.[1])
-  const head = /: (HEAD-MARK q*)\n\[…/.exec(pkg.text)![1]
-  const tail = /chars cut …\]\n(q* TAIL-MARK)\n/.exec(pkg.text)![1]
+  const head = must(/: (HEAD-MARK q*)\n\[…/.exec(pkg.text)?.[1])
+  const tail = must(/chars cut …\]\n(q* TAIL-MARK)\n/.exec(pkg.text)?.[1])
   assert.equal(k, big.length - head.length - tail.length)
   assert.ok(pkg.text.includes(`User (excerpt: ${big.length} chars, cut ${k}; full text via the command below): `))
-  assert.ok(pkg.omittedTurnIds.includes(3))
-  assert.ok(!pkg.selectedTurnIds.includes(3))
-  assert.ok(pkg.selectedTurnIds.includes(4)) // last assistant fits in the remaining 40 %
+  assert.ok(pkg.omittedTurnIds.includes(3 as TurnId))
+  assert.ok(!pkg.selectedTurnIds.includes(3 as TurnId))
+  assert.ok(pkg.selectedTurnIds.includes(4 as TurnId)) // last assistant fits in the remaining 40 %
   assert.ok(pkg.text.includes('Assistant: LAST-ASSIST'))
   assert.equal(pkg.selected, pkg.selectedTurnIds.length)
   assert.equal(pkg.omitted, turns.length - pkg.selected)
@@ -115,7 +125,7 @@ test('selector contract unchanged: protected input still [0, 3, 4], planDigest a
     { kind: 'user', text: 'u4' },
     { kind: 'command', text: 'c5' }
   ] as const
-  const cost = (i: number) => renderTurn(turns[i]).length + 1
+  const cost = (i: number) => renderTurn(must(turns[i])).length + 1
   const budget = cost(4) + cost(3) + cost(0) + 4
   assert.deepEqual(selectTurns(turns, budget, none, none), [0, 3, 4])
   assert.deepEqual(planDigest(turns, budget, none, none), { picked: [0, 3, 4] })

@@ -1,3 +1,14 @@
+declare const brand: unique symbol
+/** Nominal id: a plain string/number only becomes one through the DB row types below (or a parser, when one is needed). */
+type Brand<T, B extends string> = T & { readonly [brand]: B }
+export type ThreadId = Brand<string, 'ThreadId'> // t_<uuid>
+export type HandoffId = Brand<string, 'HandoffId'> // h_<uuid>
+export type SessionId = Brand<number, 'SessionId'> // sessions.id
+export type TurnId = Brand<number, 'TurnId'> // turns.id
+export function assertNever(x: never): never {
+  throw new Error(`unreachable: ${String(x)}`)
+}
+
 /** Agents with a native-session adapter (R5). */
 export type AdapterAgent = 'claude' | 'codex' | 'pi' | 'cursor'
 
@@ -12,7 +23,7 @@ export interface CanonicalTurn {
   paths?: string[] // touched file paths (file_change, path-bearing tool_call)
   tool?: string // tool name (tool_call, and command when the tool is known)
   at: number // ms epoch; 0 when the format has none
-  handoffId?: string // set when this turn carries a hand-off marker → stored as source='handoff'
+  handoffId?: HandoffId // set when this turn carries a hand-off marker → stored as source='handoff'
 }
 
 /** File identity, used by every cursor (recovery after truncation, replacement, .jsonl → .jsonl.zst). */
@@ -32,8 +43,8 @@ export type Cursor =
 
 /** A hand-off marker found in a raw user record before any injection filter (§0.2 join rule). */
 export interface MarkerHit {
-  handoffId: string
-  threadId: string
+  handoffId: HandoffId
+  threadId: ThreadId
   nativeId: string
   userRecordIndex: number
 }
@@ -69,31 +80,30 @@ export interface Adapter {
 
 /** @public PR3 adapter contract */
 export class UnsupportedFormat extends Error {
-  constructor(
-    readonly agent: string,
-    readonly detail: string
-  ) {
+  readonly agent: string
+  readonly detail: string
+  constructor(agent: string, detail: string) {
     super(`${agent}: unsupported session format (${detail})`)
+    this.agent = agent
+    this.detail = detail
   }
 }
 /** @public PR3 adapter contract */
 export class SessionNotFound extends Error {}
 
-export type HandoffStatus = 'draft' | 'pending' | 'delivered' | 'unconfirmed' | 'failed' | 'expired' // R15 widened, §3 decision 6
-
 /** Rows (mirror the DDL). */
 /** @public PR3 adapter contract */
 export interface ThreadRow {
-  id: string
+  id: ThreadId
   created_at: number
   updated_at: number
   next_ord: number
 }
 export interface SessionRow {
-  id: number
+  id: SessionId
   agent: string
   native_id: string
-  thread_id: string
+  thread_id: ThreadId
   workspace_id: string | null
   cwd: string | null
   source_path: string | null
@@ -103,9 +113,9 @@ export interface SessionRow {
   updated_at: number
 }
 export interface TurnRow {
-  id: number
-  thread_id: string
-  session_id: number
+  id: TurnId
+  thread_id: ThreadId
+  session_id: SessionId
   ord: number
   native_id: string
   kind: TurnKind
@@ -113,17 +123,17 @@ export interface TurnRow {
   paths: string | null /* JSON string[] */
   tool: string | null
   source: 'conversation' | 'handoff'
-  handoff_id: string | null
+  handoff_id: HandoffId | null
   active: 0 | 1
   at: number
 }
-export interface HandoffRow {
-  id: string
-  thread_id: string
-  source_session_id: number | null
+interface HandoffCommon {
+  id: HandoffId
+  thread_id: ThreadId
+  source_session_id: SessionId | null
   source_agent: string
   target_agent: string
-  target_session_id: number | null
+  target_session_id: SessionId | null
   target_terminal_id: string | null
   workspace_id: string
   strategy: 'launch' | 'resume' | 'launch-fallback'
@@ -134,32 +144,37 @@ export interface HandoffRow {
   omitted: number
   bytes: number
   lossy: 0 | 1
-  package: string | null // exact text while draft/pending, non-lossy only; NULL once settled
-  status: HandoffStatus
   error: string | null
   expires_at: number | null
   created_at: number
   updated_at: number
 }
+/** The store's invariant (q.status CASE, deliver, sweep): exact text only while the hand-off may still be sent (§0.5). */
+export type HandoffRow = HandoffCommon &
+  (
+    | { status: 'draft' | 'pending'; package: string | null } // NULL when lossy
+    | { status: 'delivered' | 'unconfirmed' | 'failed' | 'expired'; package: null }
+  )
+export type HandoffStatus = HandoffRow['status'] // R15 widened, §3 decision 6
 
 /** R12 input/output. */
 export interface ContextTarget {
   agent: string
-  sessionId?: number
+  sessionId?: SessionId
 } // sessionId set ⇒ that session is in the thread ⇒ delta
 export interface BuildContextInput {
-  threadId: string
+  threadId: ThreadId
   target: ContextTarget
   budget: number
   purpose: 'switch' | 'delegate'
-  handoffId: string
+  handoffId: HandoffId
 }
 export interface ContextPackage {
   text: string // exactly what is delivered
   bytes: number // Buffer.byteLength(text, 'utf8')
   mode: 'full' | 'delta'
-  selectedTurnIds: number[] // DB turn ids carried (→ handoff_turns); [] for lossy
-  omittedTurnIds: number[] // eligible ids not carried whole (skipped, or excerpted by rule E) → handoff_turns carried = 0; [] for lossy
+  selectedTurnIds: TurnId[] // DB turn ids carried (→ handoff_turns); [] for lossy
+  omittedTurnIds: TurnId[] // eligible ids not carried whole (skipped, or excerpted by rule E) → handoff_turns carried = 0; [] for lossy
   selected: number
   omitted: number
   coveredFromOrd: number | null

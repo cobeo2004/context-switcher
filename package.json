@@ -8,13 +8,14 @@
     "format:check": "node node_modules/prettier/bin/prettier.cjs --config .prettierrc --check .",
     "typecheck": "node node_modules/typescript/bin/tsc -p tsconfig.json --noEmit",
     "knip": "node node_modules/knip/bin/knip.js --config knip.json",
+    "semgrep": "uvx --quiet semgrep@1.185.0 --test --metrics=off semgrep/ && uvx --quiet semgrep@1.185.0 scan --metrics=off --error --disable-nosem --config semgrep/ src/",
     "gate:fixtures": "node scripts/gate-fixtures.mjs",
     "orca:validate": "orca plugin validate . --json",
     "orca:test": "H=$(mktemp -d) && HOME=$H orca plugin test .",
     "orca:check": "H=$(mktemp -d) && HOME=$H orca plugin check . --json",
     "orca:release": "orca plugin release-entry . --json",
     "scan": "bash scripts/scan.sh all",
-    "verify:code": "npm run -s types && npm run -s lint && npm run -s format:check && npm run -s typecheck && npm run -s knip && npm run -s gate:fixtures && npm run -s orca:validate && npm run -s orca:test && npm run -s orca:check && npm run -s orca:release",
+    "verify:code": "npm run -s types && npm run -s lint && npm run -s format:check && npm run -s typecheck && npm run -s knip && npm run -s semgrep && npm run -s gate:fixtures && npm run -s orca:validate && npm run -s orca:test && npm run -s orca:check && npm run -s orca:release",
     "verify": "npm run -s verify:code && npm run -s scan"
   },
   "devDependencies": {

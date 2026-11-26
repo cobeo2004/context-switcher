@@ -4,12 +4,22 @@ import { chmodSync, mkdirSync, mkdtempSync, statSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { openStore, type Store } from './store'
-import { DRAFT_TTL_MS, PENDING_SWEEP_MS, type CanonicalTurn, type ContextPackage, type MarkerHit, type ParseResult } from './types'
+import {
+  DRAFT_TTL_MS,
+  PENDING_SWEEP_MS,
+  type CanonicalTurn,
+  type ContextPackage,
+  type HandoffId,
+  type MarkerHit,
+  type ParseResult,
+  type ThreadId,
+  type TurnId
+} from './types'
 
 const T0 = 1_700_000_000_000
 const DAY = 86_400_000
-const H1 = 'h_11111111-1111-1111-1111-111111111111'
-const H2 = 'h_22222222-2222-2222-2222-222222222222'
+const H1 = 'h_11111111-1111-1111-1111-111111111111' as HandoffId
+const H2 = 'h_22222222-2222-2222-2222-222222222222' as HandoffId
 
 function tmp(): string {
   return mkdtempSync(join(tmpdir(), 'cs-store-'))
@@ -30,11 +40,15 @@ function parse(turns: CanonicalTurn[], extra: Partial<ParseResult> = {}): ParseR
   }
 }
 const WS = { workspaceId: 'ws1', terminalId: 'term1' }
+function must<T>(value: T | null | undefined): T {
+  assert.ok(value !== null && value !== undefined)
+  return value
+}
 
 function ingest(s: Store, agent: string, nativeId: string, turns: CanonicalTurn[], extra: Partial<ParseResult> = {}, ctx = WS, now = T0) {
   return s.ingestParse({ agent, nativeId }, parse(turns, extra), ctx, now)
 }
-function pkg(selectedTurnIds: number[], over: Partial<ContextPackage> = {}): ContextPackage {
+function pkg(selectedTurnIds: TurnId[], over: Partial<ContextPackage> = {}): ContextPackage {
   return {
     text: 'pkg',
     bytes: 3,
@@ -52,10 +66,10 @@ function pkg(selectedTurnIds: number[], over: Partial<ContextPackage> = {}): Con
 }
 function draft(
   s: Store,
-  id: string,
-  threadId: string,
+  id: HandoffId,
+  threadId: ThreadId,
   targetAgent: string,
-  selectedTurnIds: number[],
+  selectedTurnIds: TurnId[],
   now = T0,
   over: Record<string, unknown> = {}
 ) {
@@ -79,7 +93,7 @@ function draft(
 function status(s: Store, id: string): { status: string; package: string | null } {
   return { ...(s.db.prepare('SELECT status, package FROM handoffs WHERE id = ?').get(id) as { status: string; package: string | null }) }
 }
-function marker(handoffId: string, threadId: string, nativeId = 'm#0'): MarkerHit {
+function marker(handoffId: HandoffId, threadId: ThreadId, nativeId = 'm#0'): MarkerHit {
   return { handoffId, threadId, nativeId, userRecordIndex: 0 }
 }
 const texts = (rows: { text: string }[]) => rows.map((r) => r.text).sort()
@@ -105,7 +119,7 @@ test('re-ingesting the same parse adds nothing', () => {
   const p = [turn('a#0'), turn('a#1', 'assistant')]
   const first = ingest(s, 'claude', 'A', p)
   ingest(s, 'claude', 'A', p)
-  assert.equal(s.threadTurns(first.threadId!, 0, 100).length, 2)
+  assert.equal(s.threadTurns(must(first.threadId), 0, 100).length, 2)
   const t = s.db.prepare('SELECT next_ord FROM threads WHERE id = ?').get(first.threadId) as { next_ord: number }
   assert.equal(t.next_ord, 3)
 })
@@ -120,7 +134,7 @@ test('a parse with no turns and no markers creates no session row', () => {
 test('a marker hit that binds joins the thread and marks the hand-off delivered', () => {
   const s = fresh()
   const a = ingest(s, 'claude', 'A', [turn('a#0')])
-  const thread = a.threadId!
+  const thread = must(a.threadId)
   draft(s, H1, thread, 'codex', [])
   assert.equal(s.claimDraft(H1, T0 + 1), 'claimed')
   const b = ingest(s, 'codex', 'B', [turn('m#0', 'user', { handoffId: H1 }), turn('b#0', 'assistant')], { markers: [marker(H1, thread)] })
@@ -134,7 +148,7 @@ test('a marker hit that binds joins the thread and marks the hand-off delivered'
 
 test('a marker hit for another agent or workspace starts a new thread and leaves the hand-off pending', () => {
   const s = fresh()
-  const thread = ingest(s, 'claude', 'A', [turn('a#0')]).threadId!
+  const thread = must(ingest(s, 'claude', 'A', [turn('a#0')]).threadId)
   draft(s, H1, thread, 'codex', [])
   s.claimDraft(H1, T0 + 1)
   const wrongAgent = ingest(s, 'pi', 'P', [turn('m#0', 'user', { handoffId: H1 })], { markers: [marker(H1, thread)] })
@@ -167,7 +181,7 @@ test('a marker hit for another agent or workspace starts a new thread and leaves
 
 test('a marker in an existing session never moves it, but delivers a hand-off that targets it', () => {
   const s = fresh()
-  const t1 = ingest(s, 'claude', 'A', [turn('a#0')]).threadId!
+  const t1 = must(ingest(s, 'claude', 'A', [turn('a#0')]).threadId)
   const b = ingest(s, 'codex', 'B', [turn('b#0')])
   draft(s, H1, t1, 'codex', [], T0, { target_session_id: b.sessionId, strategy: 'resume' })
   s.claimDraft(H1, T0 + 1)
@@ -180,7 +194,7 @@ test('activeNativeIds flips turns to active=0 and back', () => {
   const s = fresh()
   const p = [turn('e1#0'), turn('e2#0', 'assistant'), turn('e3#0')]
   const r = ingest(s, 'pi', 'P', p, { activeNativeIds: ['e1#0', 'e2#0', 'e3#0'] })
-  const active = () => s.threadTurns(r.threadId!, 0, 10).map((t) => `${t.native_id}:${t.active}`)
+  const active = () => s.threadTurns(must(r.threadId), 0, 10).map((t) => `${t.native_id}:${t.active}`)
   ingest(s, 'pi', 'P', p.slice(0, 1), { activeNativeIds: ['e1#0'] })
   assert.deepEqual(active(), ['e1#0:1', 'e2#0:0', 'e3#0:0'])
   ingest(s, 'pi', 'P', p, { activeNativeIds: ['e1#0', 'e2#0', 'e3#0'] })
@@ -192,7 +206,7 @@ test('activeNativeIds flips turns to active=0 and back', () => {
 test("coverage: A:2 ingested after B:1 stays in B's delta (fails under a MAX(ord) watermark)", () => {
   const s = fresh()
   const a = ingest(s, 'claude', 'A', [turn('A:1')])
-  const thread = a.threadId!
+  const thread = must(a.threadId)
   const a1 = s.eligibleTurns(thread).map((t) => t.id)
   draft(s, H1, thread, 'codex', a1)
   s.claimDraft(H1, T0 + 1)
@@ -201,29 +215,29 @@ test("coverage: A:2 ingested after B:1 stays in B's delta (fails under a MAX(ord
   ingest(s, 'codex', 'B', [turn('m#0', 'user', { handoffId: H1 }), turn('B:1', 'assistant'), turn('B:2', 'assistant')], {
     markers: [marker(H1, thread)]
   })
-  assert.deepEqual(texts(s.eligibleTurns(thread, a.sessionId!)), ['B:1', 'B:2'])
-  assert.deepEqual(texts(s.eligibleTurns(thread, b.sessionId!)), ['A:2'])
+  assert.deepEqual(texts(s.eligibleTurns(thread, must(a.sessionId))), ['B:1', 'B:2'])
+  assert.deepEqual(texts(s.eligibleTurns(thread, must(b.sessionId))), ['A:2'])
 })
 
 test('coverage: turns from unconfirmed or failed hand-offs, and omitted turns, stay eligible', () => {
   const s = fresh()
   const a = ingest(s, 'claude', 'A', [turn('A:1'), turn('A:2'), turn('A:3')])
-  const thread = a.threadId!
+  const thread = must(a.threadId)
   const b = ingest(s, 'codex', 'B', [turn('B:1')])
-  const [t1, t2] = s.eligibleTurns(thread, b.sessionId!).map((t) => t.id)
+  const [t1, t2] = s.eligibleTurns(thread, must(b.sessionId)).map((t) => t.id)
   // H1 carried A:1 but never got confirmed; H2 carried A:2 and failed. A:3 was omitted by both.
-  draft(s, H1, thread, 'codex', [t1], T0, { target_session_id: b.sessionId })
-  draft(s, H2, thread, 'codex', [t2], T0, { target_session_id: b.sessionId })
+  draft(s, H1, thread, 'codex', [must(t1)], T0, { target_session_id: b.sessionId })
+  draft(s, H2, thread, 'codex', [must(t2)], T0, { target_session_id: b.sessionId })
   s.setHandoffStatus(H1, 'unconfirmed', null, T0)
   s.setHandoffStatus(H2, 'failed', 'boom', T0)
-  assert.deepEqual(texts(s.eligibleTurns(thread, b.sessionId!)), ['A:1', 'A:2', 'A:3'])
+  assert.deepEqual(texts(s.eligibleTurns(thread, must(b.sessionId))), ['A:1', 'A:2', 'A:3'])
 })
 
 // ---- Drafts and sweep ----
 
 test('claimDraft runs once; an expired draft cannot be claimed', () => {
   const s = fresh()
-  const thread = ingest(s, 'claude', 'A', [turn('a#0')]).threadId!
+  const thread = must(ingest(s, 'claude', 'A', [turn('a#0')]).threadId)
   draft(s, H1, thread, 'codex', [])
   assert.equal(s.claimDraft(H1, T0 + 1), 'claimed')
   assert.equal(s.claimDraft(H1, T0 + 2), 'already_run')
@@ -234,7 +248,7 @@ test('claimDraft runs once; an expired draft cannot be claimed', () => {
 
 test('sweep: old pending → unconfirmed, old draft → expired, package NULL', () => {
   const s = fresh()
-  const thread = ingest(s, 'claude', 'A', [turn('a#0')]).threadId!
+  const thread = must(ingest(s, 'claude', 'A', [turn('a#0')]).threadId)
   draft(s, H1, thread, 'codex', [])
   s.claimDraft(H1, T0)
   draft(s, H2, thread, 'codex', [])
@@ -255,7 +269,7 @@ test('turns has no output or reasoning column', () => {
 
 test('a lossy hand-off with a non-NULL package violates the CHECK', () => {
   const s = fresh()
-  const thread = ingest(s, 'claude', 'A', [turn('a#0')]).threadId!
+  const thread = must(ingest(s, 'claude', 'A', [turn('a#0')]).threadId)
   assert.throws(
     () =>
       s.db
@@ -288,11 +302,11 @@ test('a lossy hand-off with a non-NULL package violates the CHECK', () => {
 test('targetSessionFor picks the newest of two sessions of that agent', () => {
   const s = fresh()
   const a = ingest(s, 'claude', 'A', [turn('a#0')], {}, WS, T0)
-  draft(s, H1, a.threadId!, 'claude', [])
+  draft(s, H1, must(a.threadId), 'claude', [])
   s.claimDraft(H1, T0)
-  const c2 = ingest(s, 'claude', 'C2', [turn('m#0', 'user', { handoffId: H1 })], { markers: [marker(H1, a.threadId!)] }, WS, T0 + 1000)
-  assert.equal(s.targetSessionFor(a.threadId!, 'claude')?.id, c2.sessionId)
-  assert.equal(s.targetSessionFor(a.threadId!, 'codex'), null)
+  const c2 = ingest(s, 'claude', 'C2', [turn('m#0', 'user', { handoffId: H1 })], { markers: [marker(H1, must(a.threadId))] }, WS, T0 + 1000)
+  assert.equal(s.targetSessionFor(must(a.threadId), 'claude')?.id, c2.sessionId)
+  assert.equal(s.targetSessionFor(must(a.threadId), 'codex'), null)
 })
 
 // ---- Prune ----
@@ -302,14 +316,14 @@ test('prune keys on thread updated_at; prune(0) deletes nothing', () => {
   const now = T0 + 400 * DAY
   // Live thread: first session idle 200 days, second joined via hand-off yesterday.
   const old = ingest(s, 'claude', 'A', [turn('a#0')], {}, WS, now - 200 * DAY)
-  draft(s, H1, old.threadId!, 'codex', [], now - DAY)
+  draft(s, H1, must(old.threadId), 'codex', [], now - DAY)
   s.claimDraft(H1, now - DAY)
-  ingest(s, 'codex', 'B', [turn('m#0', 'user', { handoffId: H1 })], { markers: [marker(H1, old.threadId!)] }, WS, now - DAY)
+  ingest(s, 'codex', 'B', [turn('m#0', 'user', { handoffId: H1 })], { markers: [marker(H1, must(old.threadId))] }, WS, now - DAY)
   const idle = ingest(s, 'pi', 'P', [turn('p#0')], {}, WS, now - 91 * DAY)
   assert.equal(s.prune(0, now), 0)
   assert.equal(s.prune(90, now), 1)
-  assert.equal(s.threadTurns(old.threadId!, 0, 10).length, 2)
-  assert.equal(s.threadTurns(idle.threadId!, 0, 10).length, 0)
+  assert.equal(s.threadTurns(must(old.threadId), 0, 10).length, 2)
+  assert.equal(s.threadTurns(must(idle.threadId), 0, 10).length, 0)
   assert.equal((s.db.prepare('SELECT count(*) n FROM sessions').get() as { n: number }).n, 2)
 })
 

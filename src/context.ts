@@ -1,5 +1,15 @@
 import type { Store } from './store'
-import { HANDOFF_MARKER, HARD_CAP, type BuildContextInput, type CanonicalTurn, type ContextPackage, type TurnKind } from './types'
+import {
+  HANDOFF_MARKER,
+  HARD_CAP,
+  type BuildContextInput,
+  type CanonicalTurn,
+  type ContextPackage,
+  type HandoffId,
+  type ThreadId,
+  type TurnId,
+  type TurnKind
+} from './types'
 
 /** What rendering needs from a turn: a DB row (paths as JSON) or a CanonicalTurn (paths as array). */
 export interface RenderableTurn {
@@ -18,7 +28,9 @@ const envelopeRemaining = (n: number, budget: number, header: CountedText, foote
 
 function pathsOf(t: RenderableTurn): string[] {
   if (!t.paths) return []
-  return typeof t.paths === 'string' ? (JSON.parse(t.paths) as string[]) : t.paths
+  if (typeof t.paths !== 'string') return t.paths
+  const v: unknown = JSON.parse(t.paths)
+  return Array.isArray(v) ? v.filter((p): p is string => typeof p === 'string') : []
 }
 
 /** One turn as one block, full text (line format after T3 `summarizeDeltaItem`). */
@@ -49,8 +61,9 @@ export function selectTurns(turns: readonly RenderableTurn[], budget: number, he
   let remaining = envelopeRemaining(n, budget, header, footer)
   const selected = new Set<number>()
   const tryAdd = (i: number) => {
-    if (i < 0 || selected.has(i)) return
-    const cost = renderTurn(turns[i]).length + 1 // + the joining newline
+    const turn = turns[i]
+    if (!turn || selected.has(i)) return
+    const cost = renderTurn(turn).length + 1 // + the joining newline
     if (cost > remaining) return
     selected.add(i)
     remaining -= cost
@@ -82,8 +95,9 @@ export function planDigest(
   const index = turns.map((t) => t.kind).lastIndexOf('user')
   const remaining = envelopeRemaining(turns.length, budget, header, footer)
   const fallback = () => ({ picked: selectTurns(turns, budget, header, footer) })
-  if (index < 0 || renderTurn(turns[index]).length + 1 <= remaining) return fallback()
-  const text = turns[index].text
+  const turn = turns[index]
+  if (!turn || renderTurn(turn).length + 1 <= remaining) return fallback()
+  const text = turn.text
   const excerptBudget = Math.floor(0.6 * remaining)
   let cut = text.length
   let excerpt: Excerpt = { index, head: '', tail: '', cut }
@@ -92,8 +106,8 @@ export function planDigest(
     if (room < EXCERPT_MIN) return fallback()
     let headEnd = Math.ceil((2 * room) / 3)
     let tailStart = text.length - (room - headEnd)
-    if (/[\uD800-\uDBFF]/.test(text[headEnd - 1]) && /[\uDC00-\uDFFF]/.test(text[headEnd])) headEnd--
-    if (/[\uD800-\uDBFF]/.test(text[tailStart - 1]) && /[\uDC00-\uDFFF]/.test(text[tailStart])) tailStart++
+    if (/[\uD800-\uDBFF]/.test(text.charAt(headEnd - 1)) && /[\uDC00-\uDFFF]/.test(text.charAt(headEnd))) headEnd--
+    if (/[\uD800-\uDBFF]/.test(text.charAt(tailStart - 1)) && /[\uDC00-\uDFFF]/.test(text.charAt(tailStart))) tailStart++
     excerpt = { index, head: text.slice(0, headEnd), tail: text.slice(tailStart), cut: text.length - headEnd - (text.length - tailStart) }
     if (String(excerpt.cut).length === String(cut).length) break
     cut = excerpt.cut
@@ -101,13 +115,13 @@ export function planDigest(
   return { picked: selectTurns(turns, budget - renderExcerpt(text, excerpt).length - 1, header, footer), excerpt }
 }
 
-export function threadReadCommand(handoffId: string): string {
+export function threadReadCommand(handoffId: HandoffId): string {
   return `node ~/.context-switcher/bin/thread-read.mjs --handoff ${handoffId}`
 }
 
 interface PackageMeta {
-  threadId: string
-  handoffId: string
+  threadId: ThreadId
+  handoffId: HandoffId
   sourceAgent: string
   mode: 'full' | 'delta'
   lossy: boolean
@@ -136,7 +150,10 @@ function footerFor(m: PackageMeta): CountedText {
 export function renderPackage(turns: readonly RenderableTurn[], selected: readonly number[], m: PackageMeta, excerpt?: Excerpt): string {
   const body = [...selected, ...(excerpt ? [excerpt.index] : [])]
     .sort((a, b) => a - b)
-    .map((i) => (excerpt?.index === i ? renderExcerpt(turns[i].text, excerpt) : renderTurn(turns[i])))
+    .flatMap((i) => {
+      const turn = turns[i]
+      return turn ? [excerpt?.index === i ? renderExcerpt(turn.text, excerpt) : renderTurn(turn)] : []
+    })
     .join('\n')
   return [
     headerFor(m)(selected.length, turns.length - selected.length),
@@ -147,24 +164,24 @@ export function renderPackage(turns: readonly RenderableTurn[], selected: readon
     .join('\n\n')
 }
 
-function assemble(turns: readonly (RenderableTurn & { id?: number; ord?: number })[], budget: number, m: PackageMeta): ContextPackage {
+function assemble(turns: readonly (RenderableTurn & { id?: TurnId; ord?: number })[], budget: number, m: PackageMeta): ContextPackage {
   if (!Number.isFinite(budget) || budget < 1024) throw new RangeError('Context budget must be finite and at least 1024')
   const cap = Math.min(budget, HARD_CAP)
   const { picked, excerpt } = planDigest(turns, cap, headerFor(m), footerFor(m))
   const text = renderPackage(turns, picked, m, excerpt)
   if (text.length > cap) throw new RangeError('Context budget is too small for the envelope')
-  const ords = picked.map((i) => turns[i].ord).filter((o): o is number => o !== undefined)
+  const ords = picked.map((i) => turns[i]?.ord).filter((o): o is number => o !== undefined)
   return {
     text,
     bytes: byteLength(text),
     mode: m.mode,
-    selectedTurnIds: m.lossy ? [] : picked.map((i) => turns[i].id).filter((id): id is number => id !== undefined),
+    selectedTurnIds: m.lossy ? [] : picked.map((i) => turns[i]?.id).filter((id): id is TurnId => id !== undefined),
     omittedTurnIds: m.lossy
       ? []
       : turns
           .filter((_, i) => !picked.includes(i))
           .map((t) => t.id)
-          .filter((id): id is number => id !== undefined),
+          .filter((id): id is TurnId => id !== undefined),
     selected: picked.length,
     omitted: turns.length - picked.length,
     coveredFromOrd: ords.length ? Math.min(...ords) : null,
@@ -190,17 +207,18 @@ export function buildContext(store: Store, input: BuildContextInput): ContextPac
 /** In-memory turns (lossy screen capture, or the DB is unavailable). Hand-off turns are never carried. */
 export function buildFromTurns(
   turns: readonly CanonicalTurn[],
-  opts: { threadId: string; handoffId: string; sourceAgent: string; budget: number; lossy: boolean }
+  opts: { threadId: ThreadId; handoffId: HandoffId; sourceAgent: string; budget: number; lossy: boolean }
 ): ContextPackage {
   const eligible = turns.filter((t) => !t.handoffId)
   const meta: PackageMeta = { ...opts, mode: 'full', unavailable: !opts.lossy }
   // §0.3 lossy: a screen capture is one assistant turn. Fit any single input turn (including a
   // one-liner) and any assistant capture; a lone user turn beside a filtered hand-off is not a capture.
-  if (opts.lossy && eligible.length === 1 && (turns.length === 1 || eligible[0].kind === 'assistant')) {
+  const capture = eligible[0]
+  if (opts.lossy && eligible.length === 1 && capture && (turns.length === 1 || capture.kind === 'assistant')) {
     // §0.3 lossy: keep the newest m lines that fit. Rendered length grows with m, so binary-search it.
-    const lines = eligible[0].text.split('\n')
+    const lines = capture.text.split('\n')
     const newest = (m: number) => ({
-      ...eligible[0],
+      ...capture,
       text: `Screen capture: newest ${m} of ${lines.length} lines\n${lines.slice(lines.length - m).join('\n')}`
     })
     const fits = (m: number) => {
