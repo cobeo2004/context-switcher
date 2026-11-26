@@ -28,7 +28,9 @@ const envelopeRemaining = (n: number, budget: number, header: CountedText, foote
 
 function pathsOf(t: RenderableTurn): string[] {
   if (!t.paths) return []
-  return typeof t.paths === 'string' ? (JSON.parse(t.paths) as string[]) : t.paths
+  if (typeof t.paths !== 'string') return t.paths
+  const v: unknown = JSON.parse(t.paths)
+  return Array.isArray(v) ? v.filter((p): p is string => typeof p === 'string') : []
 }
 
 /** One turn as one block, full text (line format after T3 `summarizeDeltaItem`). */

@@ -90,5 +90,145 @@ export default [
     path: 'gate/c.ts',
     code: ts('// eslint-disable-next-line @typescript-eslint/no-floating-promises -- trying to sneak past\nsave()'),
     expect: ['inline-config', '@typescript-eslint/no-floating-promises']
+  },
+
+  // E3 boundaries: path-scoped, not type-aware.
+  {
+    name: 'sqlite outside store',
+    path: 'src/context.ts',
+    code: `import { DatabaseSync } from 'node:sqlite'\nexport { DatabaseSync }\n`,
+    expect: ['no-restricted-imports']
+  },
+  {
+    name: 'sqlite in store',
+    path: 'src/store.ts',
+    code: `import { DatabaseSync } from 'node:sqlite'\nexport { DatabaseSync }\n`,
+    expect: []
+  },
+  {
+    name: 'sqlite in a test',
+    path: 'src/zz.test.ts',
+    code: `import { DatabaseSync } from 'node:sqlite'\nexport { DatabaseSync }\n`,
+    expect: []
+  },
+  { name: 'dynamic import', path: 'src/context.ts', code: `export const m = import('node:sqlite')\n`, expect: ['no-restricted-syntax'] },
+  {
+    name: 'child_process outside proc',
+    path: 'src/worker.ts',
+    code: `import { execFile } from 'node:child_process'\nexport { execFile }\n`,
+    expect: ['no-restricted-imports']
+  },
+  {
+    name: 'bare child_process',
+    path: 'src/context.ts',
+    code: `import { execFile } from 'child_process'\nexport { execFile }\n`,
+    expect: ['no-restricted-imports']
+  },
+  {
+    name: 'exec in proc',
+    path: 'src/proc.ts',
+    code: `import { exec } from 'node:child_process'\nexport { exec }\n`,
+    expect: ['no-restricted-imports']
+  },
+  {
+    name: 'execFile in proc',
+    path: 'src/proc.ts',
+    code: `import { execFile } from 'node:child_process'\nexport { execFile }\n`,
+    expect: []
+  },
+  {
+    name: 'spawnSync in a test',
+    path: 'src/zz.test.ts',
+    code: `import { spawnSync } from 'node:child_process'\nexport { spawnSync }\n`,
+    expect: []
+  },
+  {
+    name: 'orca/worker outside worker',
+    path: 'src/context.ts',
+    code: `import { orca } from 'orca/worker'\nexport { orca }\n`,
+    expect: ['no-restricted-imports']
+  },
+  {
+    name: 'orca/worker in a test',
+    path: 'src/zz.test.ts',
+    code: `import { orca } from 'orca/worker'\nexport { orca }\n`,
+    expect: ['no-restricted-imports']
+  },
+  { name: 'orca/worker in worker', path: 'src/worker.ts', code: `import { orca } from 'orca/worker'\nexport { orca }\n`, expect: [] },
+  {
+    name: 'orca UI outside panel',
+    path: 'src/store.ts',
+    code: `import { Text } from 'orca'\nexport { Text }\n`,
+    expect: ['no-restricted-imports']
+  },
+  { name: 'orca UI in panel', path: 'src/panel.tsx', code: `import { Text } from 'orca'\nexport { Text }\n`, expect: [] },
+  { name: 'orca/testing in a test', path: 'src/zz.test.ts', code: `import { test } from 'orca/testing'\nexport { test }\n`, expect: [] },
+  {
+    name: 'unlisted fs write API',
+    path: 'src/store.ts',
+    code: `import { appendFileSync } from 'node:fs'\nexport { appendFileSync }\n`,
+    expect: ['no-restricted-imports']
+  },
+  {
+    name: 'fs namespace import',
+    path: 'src/store.ts',
+    code: `import * as fs from 'node:fs'\nexport { fs }\n`,
+    expect: ['no-restricted-imports']
+  },
+  {
+    name: 'fs/promises',
+    path: 'src/worker.ts',
+    code: `import { writeFile } from 'node:fs/promises'\nexport { writeFile }\n`,
+    expect: ['no-restricted-imports']
+  },
+  {
+    name: 'listed fs calls',
+    path: 'src/store.ts',
+    code: `import { chmodSync, existsSync, mkdirSync, writeFileSync } from 'node:fs'\nexport function f(p: string) {\n  mkdirSync(p, { recursive: true, mode: 0o700 })\n  if (!existsSync(p)) writeFileSync(p, '', { mode: 0o600 })\n  chmodSync(p, 0o600)\n}\n`,
+    expect: []
+  },
+  {
+    name: 'mkdtempSync in a test',
+    path: 'src/zz.test.ts',
+    code: `import { mkdtempSync } from 'node:fs'\nexport { mkdtempSync }\n`,
+    expect: []
+  },
+  {
+    name: 'fs write function as a value',
+    path: 'src/store.ts',
+    code: `import { writeFileSync } from 'node:fs'\nconst wf = writeFileSync\nexport function f(p: string) {\n  wf(p, '')\n}\n`,
+    expect: ['no-restricted-syntax']
+  },
+  {
+    name: 'fs write function via .call',
+    path: 'src/store.ts',
+    code: `import * as fs from 'node:fs'\nexport function f(p: string) {\n  fs.mkdirSync.call(fs, p, { mode: 0o777 })\n}\n`,
+    expect: ['no-restricted-imports', 'no-restricted-syntax']
+  },
+  {
+    name: 'duplicate mode key hidden from tsc',
+    path: 'src/store.ts',
+    code: `import { writeFileSync } from 'node:fs'\nexport function f(p: string) {\n  // @ts-expect-error -- duplicate key on purpose here\n  writeFileSync(p, '', { mode: 0o600, mode: 0o666 })\n}\n`,
+    expect: ['no-dupe-keys']
+  },
+  {
+    name: 'fs write function .call on a named import',
+    path: 'src/store.ts',
+    code: `import { writeFileSync } from 'node:fs'\nexport function f(p: string) {\n  writeFileSync.call(undefined, p, '', { mode: 0o600 })\n}\n`,
+    expect: ['no-restricted-syntax']
+  },
+  { name: '.mts file in src', path: 'src/zz.mts', code: 'export const a = 1\n', expect: ['no-restricted-syntax'] },
+  { name: '.js file in src', path: 'src/zz.js', code: 'export const a = 1\n', expect: ['no-restricted-syntax'] },
+  {
+    name: 'production imports a test file',
+    path: 'src/store.ts',
+    code: `import { x } from './zz.test'\nexport const y = x\n`,
+    expect: ['no-restricted-imports']
+  },
+  {
+    name: 'renamed fs write import',
+    path: 'src/store.ts',
+    code: `import { writeFileSync as w } from 'node:fs'\nexport function f(p: string) {\n  w(p, '', { mode: 0o666 })\n}\n`,
+    expect: ['no-restricted-syntax']
   }
 ]

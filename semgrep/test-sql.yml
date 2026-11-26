@@ -1,0 +1,18 @@
+rules:
+  - id: cs-sql-built-by-string-test
+    message: Test SQL may interpolate only a MIGRATION_n import or a module-level string constant (fixture ids); everything else uses `?`.
+    severity: ERROR
+    languages: [typescript]
+    paths: { include: ['*.test.ts', '*.test.tsx', '/semgrep/test-sql.fixture.ts'] }
+    patterns:
+      - pattern-either:
+          - pattern: $DB.prepare($A + $B)
+          - pattern: $DB.exec($A + $B)
+          - patterns:
+              - pattern-either:
+                  - pattern: '$DB.prepare(`...${$X}...`)'
+                  - pattern: '$DB.exec(`...${$X}...`)'
+              - pattern-not-inside: |
+                  const $X = '...'
+                  ...
+              - metavariable-regex: { metavariable: $X, regex: '^(?!MIGRATION_[0-9]+$)' }
