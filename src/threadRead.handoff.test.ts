@@ -150,8 +150,8 @@ test('tool_call metadata is printed once and excluded from text chunk offsets', 
   for (const c of cs) assert.equal(c.n, text.length)
   assert.equal(cs.map((c) => c.text).join(''), text)
   assert.ok(cs.map((c) => c.text).join('').includes(sentinel))
-  assert.equal(ps.join('\n').match(/^  paths: \/a$/gm)?.length, 1)
-  assert.equal(ps.join('\n').match(/^  tool: read$/gm)?.length, 1)
+  assert.equal(ps.join('\n').match(/^ {2}paths: \/a$/gm)?.length, 1)
+  assert.equal(ps.join('\n').match(/^ {2}tool: read$/gm)?.length, 1)
 })
 
 test('an excerpted (carried 0) turn is printed whole, chunked when it does not fit one page', () => {

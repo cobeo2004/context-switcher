@@ -1,0 +1,8 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "entry": ["src/worker.ts", "src/panel.tsx", "src/protocol.ts", "src/panel.check.ts", "src/**/*.test.{ts,tsx}", "scripts/*.mjs"],
+  "project": ["src/**/*.{ts,tsx}", "scripts/*.mjs"],
+  "ignoreExportsUsedInFile": true,
+  "ignoreDependencies": ["^orca(/.*)?$", "prettier", "@stryker-mutator/core", "fast-check"],
+  "ignoreBinaries": ["orca"]
+}
