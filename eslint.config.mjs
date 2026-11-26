@@ -37,7 +37,6 @@ export default defineConfig(
       eqeqeq: 'error'
     }
   },
-  { files: ['src/**/*.test.{ts,tsx}'], rules: { '@typescript-eslint/no-non-null-assertion': 'off' } },
   { files: ['**/*.d.ts'], rules: { 'no-var': 'off' } },
   { files: ['**/*.mjs'], extends: [tseslint.configs.disableTypeChecked] },
   { files: ['scripts/**'], languageOptions: { globals: { console: 'readonly', process: 'readonly' } }, rules: { 'no-console': 'off' } }

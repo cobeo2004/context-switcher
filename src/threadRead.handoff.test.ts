@@ -14,6 +14,10 @@ const dbPath = join(dir, 'context.sqlite')
 const cli = join(dir, 'thread-read.mjs')
 writeFileSync(cli, THREAD_READ_MJS)
 const store = openStore(dbPath)
+function must<T>(value: T | null | undefined): T {
+  assert.ok(value !== null && value !== undefined)
+  return value
+}
 
 /** One thread of `turns` and a hand-off that carried the ords in `carried` and omitted the ords in `omitted`. */
 function handoffTurns(turns: CanonicalTurn[], carried: number[], omitted: number[]): { h: string; thread: string } {
@@ -22,12 +26,13 @@ function handoffTurns(turns: CanonicalTurn[], carried: number[], omitted: number
     { turns, cursor: { kind: 'offset', file: { path: '/x', dev: 1, ino: 1, size: 1 }, offset: 1 }, formatVersion: 'v1', markers: [] },
     { workspaceId: 'ws1' }
   )
-  const idOf = new Map(store.eligibleTurns(threadId!).map((t) => [t.ord, t.id]))
+  const thread = must(threadId)
+  const idOf = new Map(store.eligibleTurns(thread).map((t) => [t.ord, t.id]))
   const h = `h_${randomUUID()}` as HandoffId
   store.createDraft(
     {
       id: h,
-      thread_id: threadId!,
+      thread_id: thread,
       source_session_id: null,
       source_agent: 'claude',
       target_agent: 'codex',
@@ -40,8 +45,8 @@ function handoffTurns(turns: CanonicalTurn[], carried: number[], omitted: number
       text: 'pkg',
       bytes: 3,
       mode: 'full',
-      selectedTurnIds: carried.map((o) => idOf.get(o)!),
-      omittedTurnIds: omitted.map((o) => idOf.get(o)!),
+      selectedTurnIds: carried.map((o) => must(idOf.get(o))),
+      omittedTurnIds: omitted.map((o) => must(idOf.get(o))),
       selected: carried.length,
       omitted: omitted.length,
       coveredFromOrd: null,
@@ -50,7 +55,7 @@ function handoffTurns(turns: CanonicalTurn[], carried: number[], omitted: number
       threadReadCommand: ''
     }
   )
-  return { h, thread: threadId! }
+  return { h, thread }
 }
 /** One thread of `texts` (ord 1..n), alternating user/assistant, and a hand-off covering `carried` + `omitted`. */
 function handoff(texts: string[], carried: number[], omitted: number[]): { h: string; thread: string } {
@@ -75,7 +80,7 @@ function pages(args: string[]): string[] {
     assert.ok(r.out.length <= PAGE_CHARS, `page ${out.length + 1} is ${r.out.length} chars`)
     assert.ok(!out.includes(r.out), 'repeated page')
     out.push(r.out)
-    const last = r.out.trimEnd().split('\n').pop()!
+    const last = must(r.out.trimEnd().split('\n').pop())
     if (last === '# end') return out
     assert.match(last, /^next: node ~\/\.context-switcher\/bin\/thread-read\.mjs --handoff /)
     const words = last.slice('next: '.length).split(' ')
@@ -90,7 +95,7 @@ const chunks = (page: string) =>
     a: Number(m[2]),
     b: Number(m[3]),
     n: Number(m[4]),
-    text: m[5]!
+    text: must(m[5])
   }))
 const LONE = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/
 
@@ -117,11 +122,11 @@ test('large metadata pages forward without losing text or metadata', () => {
           assert.equal(ms.map((m) => m[4]).join(''), meta)
           for (const m of ms) {
             assert.equal(Number(m[3]), meta.length)
-            assert.equal(Number(m[2]) - Number(m[1]) + 1, m[4]!.length)
-            assert.ok(!LONE.test(m[4]!))
+            assert.equal(Number(m[2]) - Number(m[1]) + 1, must(m[4]).length)
+            assert.ok(!LONE.test(must(m[4])))
           }
-          const offsets = ps.slice(0, -1).map((p) => Number(/--offset (\d+)$/.exec(p.trimEnd())![1]))
-          assert.ok(offsets.every((o, i) => o > 0 && (i === 0 || o > offsets[i - 1]!)))
+          const offsets = ps.slice(0, -1).map((p) => Number(must(/--offset (\d+)$/.exec(p.trimEnd())?.[1])))
+          assert.ok(offsets.every((o, i) => o > 0 && (i === 0 || o > must(offsets[i - 1]))))
         }
 })
 
@@ -133,9 +138,9 @@ test('exact set: carried {1, 9, 10}, omitted 2–8 → prints #2–#8 once, head
   )
   const ps = pages(['--handoff', h])
   assert.equal(ps.length, 1)
-  assert.equal(ps[0]!.split('\n')[0], `# hand-off ${h} thread ${thread}: 7 turns (omitted)`)
-  assert.deepEqual(wholeOrds(ps[0]!), range(2, 8))
-  assert.ok(ps[0]!.includes('#2 assistant [claude]: turn 2\n'))
+  assert.equal(must(must(ps[0]).split('\n')[0]), `# hand-off ${h} thread ${thread}: 7 turns (omitted)`)
+  assert.deepEqual(wholeOrds(must(ps[0])), range(2, 8))
+  assert.ok(must(ps[0]).includes('#2 assistant [claude]: turn 2\n'))
 })
 
 test('--full multi-page: every next line keeps --full, union is exactly 1…10 with no repeats', () => {
@@ -146,8 +151,8 @@ test('--full multi-page: every next line keeps --full, union is exactly 1…10 w
   )
   const ps = pages(['--handoff', h, '--full'])
   assert.ok(ps.length >= 2, String(ps.length))
-  assert.ok(ps[0]!.startsWith(`# hand-off ${h} thread `) && ps[0]!.split('\n')[0]!.endsWith(': 10 turns (full)'))
-  for (const p of ps.slice(0, -1)) assert.ok(p.trimEnd().split('\n').pop()!.includes(' --full '), p.slice(-200))
+  assert.ok(must(ps[0]).startsWith(`# hand-off ${h} thread `) && must(must(ps[0]).split('\n')[0]).endsWith(': 10 turns (full)'))
+  for (const p of ps.slice(0, -1)) assert.ok(must(p.trimEnd().split('\n').pop()).includes(' --full '), p.slice(-200))
   assert.deepEqual(ps.flatMap(wholeOrds), range(1, 10))
 })
 
@@ -158,8 +163,11 @@ test('default multi-page: 12 omitted turns of 1500 chars → 5 on the first page
     range(2, 13)
   )
   const ps = pages(['--handoff', h])
-  assert.deepEqual(wholeOrds(ps[0]!), range(2, 6))
-  assert.ok(ps[0]!.trimEnd().endsWith(`next: node ~/.context-switcher/bin/thread-read.mjs --handoff ${h} --after 6`), ps[0]!.slice(-200))
+  assert.deepEqual(wholeOrds(must(ps[0])), range(2, 6))
+  assert.ok(
+    must(ps[0]).trimEnd().endsWith(`next: node ~/.context-switcher/bin/thread-read.mjs --handoff ${h} --after 6`),
+    must(ps[0]).slice(-200)
+  )
   assert.deepEqual(ps.flatMap(wholeOrds), range(2, 13))
 })
 
@@ -184,11 +192,11 @@ test('one huge turn: 20 000 chars → 3 pages, chunks rejoin to the exact text, 
     cs.map((c) => c.n),
     [20_000, 20_000, 20_000]
   )
-  assert.equal(cs[0]!.a, 1)
-  assert.equal(cs[2]!.b, 20_000)
-  const offsets = ps.slice(0, -1).map((p) => Number(/--after 1 --offset (\d+)$/.exec(p.trimEnd())![1]))
-  assert.ok(offsets[0]! > 0 && offsets[1]! > offsets[0]!, offsets.join(','))
-  assert.deepEqual(offsets, [cs[0]!.b, cs[1]!.b])
+  assert.equal(must(cs[0]).a, 1)
+  assert.equal(must(cs[2]).b, 20_000)
+  const offsets = ps.slice(0, -1).map((p) => Number(must(/--after 1 --offset (\d+)$/.exec(p.trimEnd())?.[1])))
+  assert.ok(must(offsets[0]) > 0 && must(offsets[1]) > must(offsets[0]), offsets.join(','))
+  assert.deepEqual(offsets, [must(cs[0]).b, must(cs[1]).b])
 })
 
 test('tool_call metadata is printed once and excluded from text chunk offsets', () => {

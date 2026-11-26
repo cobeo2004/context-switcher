@@ -26,7 +26,18 @@ export default [
     code: ts('export const id = maybe!.id'),
     expect: ['@typescript-eslint/no-non-null-assertion']
   },
-  { name: 'non-null assertion allowed in tests', path: 'src/zz.test.ts', code: ts('export const id = maybe!.id'), expect: [] },
+  {
+    name: 'non-null assertion in tests',
+    path: 'src/zz.test.ts',
+    code: ts('export const id = maybe!.id'),
+    expect: ['@typescript-eslint/no-non-null-assertion']
+  },
+  {
+    name: 'non-null assertion narrowed in tests',
+    path: 'src/zz.test.ts',
+    code: ts("import { assert } from 'node:assert/strict'\nassert.ok(maybe)\nexport const id = maybe.id"),
+    expect: []
+  },
   { name: 'optional chain', path: 'gate/c.ts', code: ts('export const id = maybe?.id'), expect: [] },
   { name: 'console', path: 'gate/c.ts', code: ts("console.log('x')"), expect: ['no-console'] },
   { name: '@ts-ignore', path: 'gate/c.ts', code: ts('// @ts-ignore\nexport const n = 1'), expect: ['@typescript-eslint/ban-ts-comment'] },
