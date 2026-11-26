@@ -1,0 +1,51 @@
+[
+  { "at": 0, "masked": "" },
+  {
+    "at": 250,
+    "masked": "                    'a.          aaaaa@aaa-aaaaaaa-aaa.aaaaa\n                                 ---------------------------\n                                 aa: aaaaa 00.0.0 00a00 aaa00"
+  },
+  {
+    "at": 502,
+    "masked": "                    'a.          aaaaa@aaa-aaaaaaa-aaa.aaaaa\n                                 ---------------------------\n                                 aa: aaaaa 00.0.0 00a00 aaa00\n                                 aaaa: aaaaaaaaaa00,0\n                                 aaaaaa: 00.0.0\n                                 aaaaaa: 00 aaaa, 0 aaaa, 0 aaaa\n                                 aaaaaaaa: 000 (aaaa)\n                                 aaaaa: aaa 0.0\n                                 aa: aaaa"
+  },
+  {
+    "at": 1006,
+    "masked": "                    'a.          aaaaa@aaa-aaaaaaa-aaa.aaaaa\n                                 ---------------------------\n                                 aa: aaaaa 00.0.0 00a00 aaa00\n                                 aaaa: aaaaaaaaaa00,0\n                                 aaaaaa: 00.0.0\n                                 aaaaaa: 00 aaaa, 0 aaaa, 0 aaaa\n                                 aaaaaaaa: 000 (aaaa)\n                                 aaaaa: aaa 0.0\n                                 aa: aaaa\n                                 aa: aaaaaaaaa\n                                 aaaaaaaa: aaaa\n                                 aaa: aaaaa a0 aaa\n                                 aaa: aaaaa a0 aaa\n                                 aaaaaa: 0000aaa / 00000aaa\n\n\n\n\n\n      ~/a/a/a/a0-aaaaa-aaaaaaa                                                 ✔  00:00:00 "
+  },
+  {
+    "at": 1258,
+    "masked": "                    'a.          aaaaa@aaa-aaaaaaa-aaa.aaaaa\n                                 ---------------------------\n                                 aa: aaaaa 00.0.0 00a00 aaa00\n                                 aaaa: aaaaaaaaaa00,0\n                                 aaaaaa: 00.0.0\n                                 aaaaaa: 00 aaaa, 0 aaaa, 0 aaaa\n                                 aaaaaaaa: 000 (aaaa)\n                                 aaaaa: aaa 0.0\n                                 aa: aaaa\n                                 aa: aaaaaaaaa\n                                 aaaaaaaa: aaaa\n                                 aaa: aaaaa a0 aaa\n                                 aaa: aaaaa a0 aaa\n                                 aaaaaa: 0000aaa / 00000aaa\n\n\n\n\n\n      ~/a/a/a/a0-aaaaa-aaaaaaa                                                 ✔  00:00:00 "
+  },
+  {
+    "at": 1508,
+    "masked": "                    'a.          aaaaa@aaa-aaaaaaa-aaa.aaaaa\n                                 ---------------------------\n                                 aa: aaaaa 00.0.0 00a00 aaa00\n                                 aaaa: aaaaaaaaaa00,0\n                                 aaaaaa: 00.0.0\n                                 aaaaaa: 00 aaaa, 0 aaaa, 0 aaaa\n                                 aaaaaaaa: 000 (aaaa)\n                                 aaaaa: aaa 0.0\n                                 aa: aaaa\n                                 aa: aaaaaaaaa\n                                 aaaaaaaa: aaaa\n                                 aaa: aaaaa a0 aaa\n                                 aaa: aaaaa a0 aaa\n                                 aaaaaa: 0000aaa / 00000aaa\n\n\n\n\n\n      ~/a/a/a/a0-aaaaa-aaaaaaa                                                 ✔  00:00:00 "
+  },
+  {
+    "at": 1758,
+    "masked": "                    'a.          aaaaa@aaa-aaaaaaa-aaa.aaaaa\n                                 ---------------------------\n                                 aa: aaaaa 00.0.0 00a00 aaa00\n                                 aaaa: aaaaaaaaaa00,0\n                                 aaaaaa: 00.0.0\n                                 aaaaaa: 00 aaaa, 0 aaaa, 0 aaaa\n                                 aaaaaaaa: 000 (aaaa)\n                                 aaaaa: aaa 0.0\n                                 aa: aaaa\n                                 aa: aaaaaaaaa\n                                 aaaaaaaa: aaaa\n                                 aaa: aaaaa a0 aaa\n                                 aaa: aaaaa a0 aaa\n                                 aaaaaa: 0000aaa / 00000aaa\n\n\n\n\n\n      ~/a/a/a/a0-aaaaa-aaaaaaa  /aaaaa/aaaaa/.aaaaa:aaaaaa:000: aaa aaaaa aa aaaa aaaaaaa: aaaaaaa,\n❯ aa"
+  },
+  {
+    "at": 2010,
+    "masked": "                    'a.          aaaaa@aaa-aaaaaaa-aaa.aaaaa\n                                 ---------------------------\n                                 aa: aaaaa 00.0.0 00a00 aaa00\n                                 aaaa: aaaaaaaaaa00,0\n                                 aaaaaa: 00.0.0\n                                 aaaaaa: 00 aaaa, 0 aaaa, 0 aaaa\n                                 aaaaaaaa: 000 (aaaa)\n                                 aaaaa: aaa 0.0\n                                 aa: aaaa\n                                 aa: aaaaaaaaa\n                                 aaaaaaaa: aaaa\n                                 aaa: aaaaa a0 aaa\n                                 aaa: aaaaa a0 aaa\n                                 aaaaaa: 0000aaa / 00000aaa\n\n\n\n\n\n      ~/a/a/a/a0-aaaaa-aaaaaaa  /aaaaa/aaaaa/.aaaaa:aaaaaa:000: aaa aaaaa aa aaaa aaaaaaa: aaaaaaa,\n❯ aa"
+  },
+  {
+    "at": 2260,
+    "masked": "                    'a.          aaaaa@aaa-aaaaaaa-aaa.aaaaa\n                                 ---------------------------\n                                 aa: aaaaa 00.0.0 00a00 aaa00\n                                 aaaa: aaaaaaaaaa00,0\n                                 aaaaaa: 00.0.0\n                                 aaaaaa: 00 aaaa, 0 aaaa, 0 aaaa\n                                 aaaaaaaa: 000 (aaaa)\n                                 aaaaa: aaa 0.0\n                                 aa: aaaa\n                                 aa: aaaaaaaaa\n                                 aaaaaaaa: aaaa\n                                 aaa: aaaaa a0 aaa\n                                 aaa: aaaaa a0 aaa\n                                 aaaaaa: 0000aaa / 00000aaa\n\n\n\n\n\n      ~/a/a/a/a0-aaaaa-aaaaaaa  /aaaaa/aaaaa/.aaaaa:aaaaaa:000: aaa aaaaa aa aaaa aaaaaaa: aaaaaaa,\n❯ aa"
+  },
+  {
+    "at": 2512,
+    "masked": "                    'a.          aaaaa@aaa-aaaaaaa-aaa.aaaaa\n                                 ---------------------------\n                                 aa: aaaaa 00.0.0 00a00 aaa00\n                                 aaaa: aaaaaaaaaa00,0\n                                 aaaaaa: 00.0.0\n                                 aaaaaa: 00 aaaa, 0 aaaa, 0 aaaa\n                                 aaaaaaaa: 000 (aaaa)\n                                 aaaaa: aaa 0.0\n                                 aa: aaaa\n                                 aa: aaaaaaaaa\n                                 aaaaaaaa: aaaa\n                                 aaa: aaaaa a0 aaa\n                                 aaa: aaaaa a0 aaa\n                                 aaaaaa: 0000aaa / 00000aaa\n\n\n\n\n\n      ~/a/a/a/a0-aaaaa-aaaaaaa  /aaaaa/aaaaa/.aaaaa:aaaaaa:000: aaa aaaaa aa aaaa aaaaaaa: aaaaaaa,\n❯ aa"
+  },
+  {
+    "at": 2764,
+    "masked": "                    'a.          aaaaa@aaa-aaaaaaa-aaa.aaaaa\n                                 ---------------------------\n                                 aa: aaaaa 00.0.0 00a00 aaa00\n                                 aaaa: aaaaaaaaaa00,0\n                                 aaaaaa: 00.0.0\n                                 aaaaaa: 00 aaaa, 0 aaaa, 0 aaaa\n                                 aaaaaaaa: 000 (aaaa)\n                                 aaaaa: aaa 0.0\n                                 aa: aaaa\n                                 aa: aaaaaaaaa\n                                 aaaaaaaa: aaaa\n                                 aaa: aaaaa a0 aaa\n                                 aaa: aaaaa a0 aaa\n                                 aaaaaa: 0000aaa / 00000aaa\n\n\n\n\n\n      ~/a/a/a/a0-aaaaa-aaaaaaa  /aaaaa/aaaaa/.aaaaa:aaaaaa:000: aaa aaaaa aa aaaa aaaaaaa: aaaaaaa,\n❯ aa"
+  },
+  {
+    "at": 3016,
+    "masked": "                    'a.          aaaaa@aaa-aaaaaaa-aaa.aaaaa\n                                 ---------------------------\n                                 aa: aaaaa 00.0.0 00a00 aaa00\n                                 aaaa: aaaaaaaaaa00,0\n                                 aaaaaa: 00.0.0\n                                 aaaaaa: 00 aaaa, 0 aaaa, 0 aaaa\n                                 aaaaaaaa: 000 (aaaa)\n                                 aaaaa: aaa 0.0\n                                 aa: aaaa\n                                 aa: aaaaaaaaa\n                                 aaaaaaaa: aaaa\n                                 aaa: aaaaa a0 aaa\n                                 aaa: aaaaa a0 aaa\n                                 aaaaaa: 0000aaa / 00000aaa\n\n\n\n\n\n      ~/a/a/a/a0-aaaaa-aaaaaaa  /aaaaa/aaaaa/.aaaaa:aaaaaa:000: aaa aaaaa aa aaaa aaaaaaa: aaaaaaa,\n❯ aa"
+  },
+  {
+    "at": 3266,
+    "masked": "                    'a.          aaaaa@aaa-aaaaaaa-aaa.aaaaa\n                                 ---------------------------\n                                 aa: aaaaa 00.0.0 00a00 aaa00\n                                 aaaa: aaaaaaaaaa00,0\n                                 aaaaaa: 00.0.0\n                                 aaaaaa: 00 aaaa, 0 aaaa, 0 aaaa\n                                 aaaaaaaa: 000 (aaaa)\n                                 aaaaa: aaa 0.0\n                                 aa: aaaa\n                                 aa: aaaaaaaaa\n                                 aaaaaaaa: aaaa\n                                 aaa: aaaaa a0 aaa\n                                 aaa: aaaaa a0 aaa\n                                 aaaaaa: 0000aaa / 00000aaa\n\n\n\n\n\n      ~/a/a/a/a0-aaaaa-aaaaaaa  /aaaaa/aaaaa/.aaaaa:aaaaaa:000: aaa aaaaa aa aaaa aaaaaaa: aaaaaaa,\n❯ aa"
+  }
+]
