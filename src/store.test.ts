@@ -4,12 +4,22 @@ import { chmodSync, mkdirSync, mkdtempSync, statSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { openStore, type Store } from './store'
-import { DRAFT_TTL_MS, PENDING_SWEEP_MS, type CanonicalTurn, type ContextPackage, type MarkerHit, type ParseResult } from './types'
+import {
+  DRAFT_TTL_MS,
+  PENDING_SWEEP_MS,
+  type CanonicalTurn,
+  type ContextPackage,
+  type HandoffId,
+  type MarkerHit,
+  type ParseResult,
+  type ThreadId,
+  type TurnId
+} from './types'
 
 const T0 = 1_700_000_000_000
 const DAY = 86_400_000
-const H1 = 'h_11111111-1111-1111-1111-111111111111'
-const H2 = 'h_22222222-2222-2222-2222-222222222222'
+const H1 = 'h_11111111-1111-1111-1111-111111111111' as HandoffId
+const H2 = 'h_22222222-2222-2222-2222-222222222222' as HandoffId
 
 function tmp(): string {
   return mkdtempSync(join(tmpdir(), 'cs-store-'))
@@ -34,7 +44,7 @@ const WS = { workspaceId: 'ws1', terminalId: 'term1' }
 function ingest(s: Store, agent: string, nativeId: string, turns: CanonicalTurn[], extra: Partial<ParseResult> = {}, ctx = WS, now = T0) {
   return s.ingestParse({ agent, nativeId }, parse(turns, extra), ctx, now)
 }
-function pkg(selectedTurnIds: number[], over: Partial<ContextPackage> = {}): ContextPackage {
+function pkg(selectedTurnIds: TurnId[], over: Partial<ContextPackage> = {}): ContextPackage {
   return {
     text: 'pkg',
     bytes: 3,
@@ -52,10 +62,10 @@ function pkg(selectedTurnIds: number[], over: Partial<ContextPackage> = {}): Con
 }
 function draft(
   s: Store,
-  id: string,
-  threadId: string,
+  id: HandoffId,
+  threadId: ThreadId,
   targetAgent: string,
-  selectedTurnIds: number[],
+  selectedTurnIds: TurnId[],
   now = T0,
   over: Record<string, unknown> = {}
 ) {
@@ -79,7 +89,7 @@ function draft(
 function status(s: Store, id: string): { status: string; package: string | null } {
   return { ...(s.db.prepare('SELECT status, package FROM handoffs WHERE id = ?').get(id) as { status: string; package: string | null }) }
 }
-function marker(handoffId: string, threadId: string, nativeId = 'm#0'): MarkerHit {
+function marker(handoffId: HandoffId, threadId: ThreadId, nativeId = 'm#0'): MarkerHit {
   return { handoffId, threadId, nativeId, userRecordIndex: 0 }
 }
 const texts = (rows: { text: string }[]) => rows.map((r) => r.text).sort()

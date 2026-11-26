@@ -6,7 +6,7 @@ import { join } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { openStore } from './store'
 import { THREAD_READ_MJS } from './cliSource'
-import type { CanonicalTurn } from './types'
+import type { CanonicalTurn, HandoffId } from './types'
 
 const PAGE_CHARS = 8000
 const dir = mkdtempSync(join(tmpdir(), 'cs-trh-'))
@@ -23,7 +23,7 @@ function handoffTurns(turns: CanonicalTurn[], carried: number[], omitted: number
     { workspaceId: 'ws1' }
   )
   const idOf = new Map(store.eligibleTurns(threadId!).map((t) => [t.ord, t.id]))
-  const h = `h_${randomUUID()}`
+  const h = `h_${randomUUID()}` as HandoffId
   store.createDraft(
     {
       id: h,

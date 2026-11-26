@@ -4,11 +4,12 @@ import { openStore } from './store'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import type { HandoffId, ThreadId } from './types'
 
 const turns = [{ nativeId: 'a', kind: 'user' as const, text: 'hello', at: 0 }]
 const opts = {
-  threadId: 't_11111111-1111-1111-1111-111111111111',
-  handoffId: 'h_11111111-1111-1111-1111-111111111111',
+  threadId: 't_11111111-1111-1111-1111-111111111111' as ThreadId,
+  handoffId: 'h_11111111-1111-1111-1111-111111111111' as HandoffId,
   sourceAgent: 'claude',
   budget: 1024,
   lossy: false

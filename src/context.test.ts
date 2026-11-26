@@ -4,10 +4,10 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { openStore, type Store } from './store'
 import { buildContext, buildFromTurns, renderTurn, selectTurns } from './context'
-import { HANDOFF_MARKER, HARD_CAP, type CanonicalTurn, type ParseResult } from './types'
+import { HANDOFF_MARKER, HARD_CAP, type CanonicalTurn, type HandoffId, type ParseResult, type SessionId, type ThreadId } from './types'
 
-const H1 = 'h_11111111-1111-1111-1111-111111111111'
-const H2 = 'h_22222222-2222-2222-2222-222222222222'
+const H1 = 'h_11111111-1111-1111-1111-111111111111' as HandoffId
+const H2 = 'h_22222222-2222-2222-2222-222222222222' as HandoffId
 const WS = { workspaceId: 'ws1', terminalId: 'term1' }
 const bytes = (s: string) => new TextEncoder().encode(s).length
 const count = (s: string, needle: string) => s.split(needle).length - 1
@@ -41,7 +41,7 @@ function longThread(s: Store, oversized = false) {
   }
   return s.ingestParse({ agent: 'claude', nativeId: 'A' }, parse(turns), WS)
 }
-const input = (threadId: string, budget = 32768, sessionId?: number) => ({
+const input = (threadId: ThreadId, budget = 32768, sessionId?: SessionId) => ({
   threadId,
   target: { agent: 'codex', ...(sessionId === undefined ? {} : { sessionId }) },
   budget,

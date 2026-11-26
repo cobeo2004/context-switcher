@@ -4,11 +4,11 @@ import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { MIGRATION_1, openStore, type Store } from './store'
-import type { CanonicalTurn, ContextPackage, ParseResult } from './types'
+import type { CanonicalTurn, ContextPackage, HandoffId, ParseResult, ThreadId, TurnId } from './types'
 
 const T0 = 1_700_000_000_000
-const H1 = 'h_11111111-1111-1111-1111-111111111111'
-const H2 = 'h_22222222-2222-2222-2222-222222222222'
+const H1 = 'h_11111111-1111-1111-1111-111111111111' as HandoffId
+const H2 = 'h_22222222-2222-2222-2222-222222222222' as HandoffId
 const WS = { workspaceId: 'ws1', terminalId: 'term1' }
 
 const tmpPath = () => join(mkdtempSync(join(tmpdir(), 'cs-mig-')), 'context.sqlite')
@@ -26,7 +26,7 @@ const parse = (turns: CanonicalTurn[], extra: Partial<ParseResult> = {}): ParseR
   markers: [],
   ...extra
 })
-function pkg(selectedTurnIds: number[], omittedTurnIds: number[], text = 'pkg é'): ContextPackage {
+function pkg(selectedTurnIds: TurnId[], omittedTurnIds: TurnId[], text = 'pkg é'): ContextPackage {
   return {
     text,
     bytes: 0,
@@ -41,7 +41,7 @@ function pkg(selectedTurnIds: number[], omittedTurnIds: number[], text = 'pkg é
     threadReadCommand: 'node x'
   }
 }
-function draft(s: Store, id: string, threadId: string, sel: number[], omit: number[], text?: string) {
+function draft(s: Store, id: HandoffId, threadId: ThreadId, sel: TurnId[], omit: TurnId[], text?: string) {
   s.createDraft(
     {
       id,
@@ -144,7 +144,7 @@ test("createDraft writes chars and carried 0 rows; omitted turns stay in a deliv
       ['A:3', 1]
     ]
   )
-  assert.deepEqual(s.coveredFor('h_none'), [])
+  assert.deepEqual(s.coveredFor('h_none' as HandoffId), [])
 })
 
 test('in_input: set only while pending/unconfirmed, cleared by delivered/failed/expired', () => {

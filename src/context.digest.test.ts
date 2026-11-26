@@ -1,10 +1,16 @@
 import { assert, test } from 'orca/testing'
 import { buildContext, buildFromTurns, planDigest, renderTurn, selectTurns } from './context'
 import type { Store } from './store'
-import type { CanonicalTurn } from './types'
+import type { CanonicalTurn, HandoffId, ThreadId, TurnId } from './types'
 
-const H = 'h_11111111-1111-1111-1111-111111111111'
-const opts = { threadId: 't_11111111-1111-1111-1111-111111111111', handoffId: H, sourceAgent: 'claude', budget: 4096, lossy: false }
+const H = 'h_11111111-1111-1111-1111-111111111111' as HandoffId
+const opts = {
+  threadId: 't_11111111-1111-1111-1111-111111111111' as ThreadId,
+  handoffId: H,
+  sourceAgent: 'claude',
+  budget: 4096,
+  lossy: false
+}
 const turn = (kind: CanonicalTurn['kind'], text: string, i = 0): CanonicalTurn => ({ nativeId: `n${i}`, kind, text, at: 0 })
 const rows = (turns: CanonicalTurn[]) => turns.map((t, i) => ({ ...t, id: i + 1, ord: i + 1, agent: 'claude' }))
 const stored = (turns: CanonicalTurn[], budget = 4096) =>
@@ -93,9 +99,9 @@ test('rule E: an oversized last user turn is excerpted head + tail with the true
   const tail = /chars cut …\]\n(q* TAIL-MARK)\n/.exec(pkg.text)![1]!
   assert.equal(k, big.length - head.length - tail.length)
   assert.ok(pkg.text.includes(`User (excerpt: ${big.length} chars, cut ${k}; full text via the command below): `))
-  assert.ok(pkg.omittedTurnIds.includes(3))
-  assert.ok(!pkg.selectedTurnIds.includes(3))
-  assert.ok(pkg.selectedTurnIds.includes(4)) // last assistant fits in the remaining 40 %
+  assert.ok(pkg.omittedTurnIds.includes(3 as TurnId))
+  assert.ok(!pkg.selectedTurnIds.includes(3 as TurnId))
+  assert.ok(pkg.selectedTurnIds.includes(4 as TurnId)) // last assistant fits in the remaining 40 %
   assert.ok(pkg.text.includes('Assistant: LAST-ASSIST'))
   assert.equal(pkg.selected, pkg.selectedTurnIds.length)
   assert.equal(pkg.omitted, turns.length - pkg.selected)

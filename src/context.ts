@@ -1,5 +1,15 @@
 import type { Store } from './store'
-import { HANDOFF_MARKER, HARD_CAP, type BuildContextInput, type CanonicalTurn, type ContextPackage, type TurnKind } from './types'
+import {
+  HANDOFF_MARKER,
+  HARD_CAP,
+  type BuildContextInput,
+  type CanonicalTurn,
+  type ContextPackage,
+  type HandoffId,
+  type ThreadId,
+  type TurnId,
+  type TurnKind
+} from './types'
 
 /** What rendering needs from a turn: a DB row (paths as JSON) or a CanonicalTurn (paths as array). */
 export interface RenderableTurn {
@@ -103,13 +113,13 @@ export function planDigest(
   return { picked: selectTurns(turns, budget - renderExcerpt(text, excerpt).length - 1, header, footer), excerpt }
 }
 
-export function threadReadCommand(handoffId: string): string {
+export function threadReadCommand(handoffId: HandoffId): string {
   return `node ~/.context-switcher/bin/thread-read.mjs --handoff ${handoffId}`
 }
 
 interface PackageMeta {
-  threadId: string
-  handoffId: string
+  threadId: ThreadId
+  handoffId: HandoffId
   sourceAgent: string
   mode: 'full' | 'delta'
   lossy: boolean
@@ -152,7 +162,7 @@ export function renderPackage(turns: readonly RenderableTurn[], selected: readon
     .join('\n\n')
 }
 
-function assemble(turns: readonly (RenderableTurn & { id?: number; ord?: number })[], budget: number, m: PackageMeta): ContextPackage {
+function assemble(turns: readonly (RenderableTurn & { id?: TurnId; ord?: number })[], budget: number, m: PackageMeta): ContextPackage {
   if (!Number.isFinite(budget) || budget < 1024) throw new RangeError('Context budget must be finite and at least 1024')
   const cap = Math.min(budget, HARD_CAP)
   const { picked, excerpt } = planDigest(turns, cap, headerFor(m), footerFor(m))
@@ -163,13 +173,13 @@ function assemble(turns: readonly (RenderableTurn & { id?: number; ord?: number 
     text,
     bytes: byteLength(text),
     mode: m.mode,
-    selectedTurnIds: m.lossy ? [] : picked.map((i) => turns[i]?.id).filter((id): id is number => id !== undefined),
+    selectedTurnIds: m.lossy ? [] : picked.map((i) => turns[i]?.id).filter((id): id is TurnId => id !== undefined),
     omittedTurnIds: m.lossy
       ? []
       : turns
           .filter((_, i) => !picked.includes(i))
           .map((t) => t.id)
-          .filter((id): id is number => id !== undefined),
+          .filter((id): id is TurnId => id !== undefined),
     selected: picked.length,
     omitted: turns.length - picked.length,
     coveredFromOrd: ords.length ? Math.min(...ords) : null,
@@ -195,7 +205,7 @@ export function buildContext(store: Store, input: BuildContextInput): ContextPac
 /** In-memory turns (lossy screen capture, or the DB is unavailable). Hand-off turns are never carried. */
 export function buildFromTurns(
   turns: readonly CanonicalTurn[],
-  opts: { threadId: string; handoffId: string; sourceAgent: string; budget: number; lossy: boolean }
+  opts: { threadId: ThreadId; handoffId: HandoffId; sourceAgent: string; budget: number; lossy: boolean }
 ): ContextPackage {
   const eligible = turns.filter((t) => !t.handoffId)
   const meta: PackageMeta = { ...opts, mode: 'full', unavailable: !opts.lossy }
