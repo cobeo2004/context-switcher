@@ -8,7 +8,13 @@ const opts = { threadId: 't_11111111-1111-1111-1111-111111111111', handoffId: H,
 const turn = (kind: CanonicalTurn['kind'], text: string, i = 0): CanonicalTurn => ({ nativeId: `n${i}`, kind, text, at: 0 })
 const rows = (turns: CanonicalTurn[]) => turns.map((t, i) => ({ ...t, id: i + 1, ord: i + 1, agent: 'claude' }))
 const stored = (turns: CanonicalTurn[], budget = 4096) =>
-  buildContext({ eligibleTurns: () => rows(turns) } as unknown as Store, { threadId: opts.threadId, handoffId: H, target: { agent: 'codex' }, budget, purpose: 'switch' })
+  buildContext({ eligibleTurns: () => rows(turns) } as unknown as Store, {
+    threadId: opts.threadId,
+    handoffId: H,
+    target: { agent: 'codex' },
+    budget,
+    purpose: 'switch'
+  })
 const LONE = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/
 const none = () => ''
 
@@ -72,7 +78,12 @@ test('astral text never leaves a lone surrogate, also when the excerpt cut lands
 
 test('rule E: an oversized last user turn is excerpted head + tail with the true cut count', () => {
   const big = `HEAD-MARK ${'q'.repeat(19_980)} TAIL-MARK`
-  const turns = [turn('user', 'first ask', 0), turn('assistant', 'early answer', 1), turn('user', big, 2), turn('assistant', 'LAST-ASSIST', 3)]
+  const turns = [
+    turn('user', 'first ask', 0),
+    turn('assistant', 'early answer', 1),
+    turn('user', big, 2),
+    turn('assistant', 'LAST-ASSIST', 3)
+  ]
   const pkg = stored(turns)
   assert.ok(pkg.text.length <= 4096, String(pkg.text.length))
   assert.ok(pkg.text.includes('HEAD-MARK'))
@@ -97,8 +108,12 @@ test('rule E floor: room below EXCERPT_MIN skips the turn whole', () => {
 
 test('selector contract unchanged: protected input still [0, 3, 4], planDigest agrees when the last user fits', () => {
   const turns = [
-    { kind: 'user', text: 'u0' }, { kind: 'assistant', text: 'a1' }, { kind: 'user', text: 'u2' },
-    { kind: 'assistant', text: 'a3' }, { kind: 'user', text: 'u4' }, { kind: 'command', text: 'c5' }
+    { kind: 'user', text: 'u0' },
+    { kind: 'assistant', text: 'a1' },
+    { kind: 'user', text: 'u2' },
+    { kind: 'assistant', text: 'a3' },
+    { kind: 'user', text: 'u4' },
+    { kind: 'command', text: 'c5' }
   ] as const
   const cost = (i: number) => renderTurn(turns[i]).length + 1
   const budget = cost(4) + cost(3) + cost(0) + 4
@@ -108,7 +123,12 @@ test('selector contract unchanged: protected input still [0, 3, 4], planDigest a
 })
 
 test('other oversized turns are still skipped whole', () => {
-  const pkg = stored([turn('user', 'ask', 0), turn('user', `OLD ${'x'.repeat(9000)}`, 1), turn('assistant', `BIG ${'x'.repeat(9000)}`, 2), turn('user', 'last ask', 3)])
+  const pkg = stored([
+    turn('user', 'ask', 0),
+    turn('user', `OLD ${'x'.repeat(9000)}`, 1),
+    turn('assistant', `BIG ${'x'.repeat(9000)}`, 2),
+    turn('user', 'last ask', 3)
+  ])
   assert.ok(!pkg.text.includes('xxxxxxxxxx'))
   assert.ok(!pkg.text.includes('excerpt:'))
   assert.deepEqual(pkg.omittedTurnIds, [2, 3])
@@ -116,7 +136,11 @@ test('other oversized turns are still skipped whole', () => {
 
 test('footers: --handoff command, lossy without command, DB unavailable', () => {
   assert.ok(stored([turn('user', 'hi')]).text.includes(`Read them with: node ~/.context-switcher/bin/thread-read.mjs --handoff ${H}`))
-  assert.ok(buildFromTurns([turn('user', 'hi')], opts).text.includes('Omitted 0 turns; the history database is unavailable, so they cannot be read back.'))
+  assert.ok(
+    buildFromTurns([turn('user', 'hi')], opts).text.includes(
+      'Omitted 0 turns; the history database is unavailable, so they cannot be read back.'
+    )
+  )
   const lines = Array.from({ length: 3000 }, (_, i) => `line-${i}`)
   const lossy = buildFromTurns([turn('assistant', lines.join('\n'))], { ...opts, lossy: true })
   assert.ok(lossy.text.length <= 4096)

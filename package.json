@@ -4,6 +4,8 @@
   "scripts": {
     "types": "orca plugin types .",
     "lint": "node node_modules/eslint/bin/eslint.js --config eslint.config.mjs --max-warnings 0 .",
+    "format": "node node_modules/prettier/bin/prettier.cjs --config .prettierrc --write .",
+    "format:check": "node node_modules/prettier/bin/prettier.cjs --config .prettierrc --check .",
     "typecheck": "node node_modules/typescript/bin/tsc -p tsconfig.json --noEmit",
     "knip": "node node_modules/knip/bin/knip.js --config knip.json",
     "gate:fixtures": "node scripts/gate-fixtures.mjs",
@@ -12,7 +14,7 @@
     "orca:check": "H=$(mktemp -d) && HOME=$H orca plugin check . --json",
     "orca:release": "orca plugin release-entry . --json",
     "scan": "bash scripts/scan.sh all",
-    "verify:code": "npm run -s types && npm run -s lint && npm run -s typecheck && npm run -s knip && npm run -s gate:fixtures && npm run -s orca:validate && npm run -s orca:test && npm run -s orca:check && npm run -s orca:release",
+    "verify:code": "npm run -s types && npm run -s lint && npm run -s format:check && npm run -s typecheck && npm run -s knip && npm run -s gate:fixtures && npm run -s orca:validate && npm run -s orca:test && npm run -s orca:check && npm run -s orca:release",
     "verify": "npm run -s verify:code && npm run -s scan"
   },
   "devDependencies": {

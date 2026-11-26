@@ -36,15 +36,41 @@ function ingest(s: Store, agent: string, nativeId: string, turns: CanonicalTurn[
 }
 function pkg(selectedTurnIds: number[], over: Partial<ContextPackage> = {}): ContextPackage {
   return {
-    text: 'pkg', bytes: 3, mode: 'full', selectedTurnIds, omittedTurnIds: [], selected: selectedTurnIds.length, omitted: 0,
-    coveredFromOrd: null, coveredToOrd: null, lossy: false, threadReadCommand: 'node x', ...over
+    text: 'pkg',
+    bytes: 3,
+    mode: 'full',
+    selectedTurnIds,
+    omittedTurnIds: [],
+    selected: selectedTurnIds.length,
+    omitted: 0,
+    coveredFromOrd: null,
+    coveredToOrd: null,
+    lossy: false,
+    threadReadCommand: 'node x',
+    ...over
   }
 }
-function draft(s: Store, id: string, threadId: string, targetAgent: string, selectedTurnIds: number[], now = T0, over: Record<string, unknown> = {}) {
+function draft(
+  s: Store,
+  id: string,
+  threadId: string,
+  targetAgent: string,
+  selectedTurnIds: number[],
+  now = T0,
+  over: Record<string, unknown> = {}
+) {
   s.createDraft(
     {
-      id, thread_id: threadId, source_session_id: null, source_agent: 'claude', target_agent: targetAgent,
-      target_session_id: null, target_terminal_id: 'term1', workspace_id: 'ws1', strategy: 'launch', ...over
+      id,
+      thread_id: threadId,
+      source_session_id: null,
+      source_agent: 'claude',
+      target_agent: targetAgent,
+      target_session_id: null,
+      target_terminal_id: 'term1',
+      workspace_id: 'ws1',
+      strategy: 'launch',
+      ...over
     },
     pkg(selectedTurnIds),
     now
@@ -114,12 +140,28 @@ test('a marker hit for another agent or workspace starts a new thread and leaves
   const wrongAgent = ingest(s, 'pi', 'P', [turn('m#0', 'user', { handoffId: H1 })], { markers: [marker(H1, thread)] })
   assert.notEqual(wrongAgent.threadId, thread)
   assert.ok(wrongAgent.warnings.length > 0)
-  const wrongWs = ingest(s, 'codex', 'B', [turn('m#0', 'user', { handoffId: H1 })], { markers: [marker(H1, thread)] }, { workspaceId: 'ws2', terminalId: 'term1' })
+  const wrongWs = ingest(
+    s,
+    'codex',
+    'B',
+    [turn('m#0', 'user', { handoffId: H1 })],
+    { markers: [marker(H1, thread)] },
+    { workspaceId: 'ws2', terminalId: 'term1' }
+  )
   assert.notEqual(wrongWs.threadId, thread)
-  const wrongTerm = ingest(s, 'codex', 'C', [turn('m#0', 'user', { handoffId: H1 })], { markers: [marker(H1, thread)] }, { workspaceId: 'ws1', terminalId: 'other' })
+  const wrongTerm = ingest(
+    s,
+    'codex',
+    'C',
+    [turn('m#0', 'user', { handoffId: H1 })],
+    { markers: [marker(H1, thread)] },
+    { workspaceId: 'ws1', terminalId: 'other' }
+  )
   assert.notEqual(wrongTerm.threadId, thread)
   assert.equal(status(s, H1).status, 'pending')
-  const m = s.db.prepare("SELECT source FROM turns WHERE native_id = 'm#0' AND session_id = ?").get(wrongAgent.sessionId) as { source: string }
+  const m = s.db.prepare("SELECT source FROM turns WHERE native_id = 'm#0' AND session_id = ?").get(wrongAgent.sessionId) as {
+    source: string
+  }
   assert.equal(m.source, 'handoff')
 })
 
@@ -147,7 +189,7 @@ test('activeNativeIds flips turns to active=0 and back', () => {
 
 // ---- Coverage ([WM]) ----
 
-test('coverage: A:2 ingested after B:1 stays in B\'s delta (fails under a MAX(ord) watermark)', () => {
+test("coverage: A:2 ingested after B:1 stays in B's delta (fails under a MAX(ord) watermark)", () => {
   const s = fresh()
   const a = ingest(s, 'claude', 'A', [turn('A:1')])
   const thread = a.threadId!
@@ -156,7 +198,9 @@ test('coverage: A:2 ingested after B:1 stays in B\'s delta (fails under a MAX(or
   s.claimDraft(H1, T0 + 1)
   const b = ingest(s, 'codex', 'B', [turn('m#0', 'user', { handoffId: H1 }), turn('B:1', 'assistant')], { markers: [marker(H1, thread)] })
   ingest(s, 'claude', 'A', [turn('A:1'), turn('A:2')])
-  ingest(s, 'codex', 'B', [turn('m#0', 'user', { handoffId: H1 }), turn('B:1', 'assistant'), turn('B:2', 'assistant')], { markers: [marker(H1, thread)] })
+  ingest(s, 'codex', 'B', [turn('m#0', 'user', { handoffId: H1 }), turn('B:1', 'assistant'), turn('B:2', 'assistant')], {
+    markers: [marker(H1, thread)]
+  })
   assert.deepEqual(texts(s.eligibleTurns(thread, a.sessionId!)), ['B:1', 'B:2'])
   assert.deepEqual(texts(s.eligibleTurns(thread, b.sessionId!)), ['A:2'])
 })
@@ -212,16 +256,32 @@ test('turns has no output or reasoning column', () => {
 test('a lossy hand-off with a non-NULL package violates the CHECK', () => {
   const s = fresh()
   const thread = ingest(s, 'claude', 'A', [turn('a#0')]).threadId!
-  assert.throws(() =>
-    s.db.prepare(
-      `INSERT INTO handoffs (id, thread_id, source_agent, target_agent, workspace_id, strategy, mode, selected, omitted, bytes, lossy, package, status, created_at, updated_at)
+  assert.throws(
+    () =>
+      s.db
+        .prepare(
+          `INSERT INTO handoffs (id, thread_id, source_agent, target_agent, workspace_id, strategy, mode, selected, omitted, bytes, lossy, package, status, created_at, updated_at)
        VALUES (?, ?, 'antigravity', 'claude', 'ws1', 'launch', 'full', 0, 0, 3, 1, 'secret', 'draft', 0, 0)`
-    ).run(H1, thread), /CHECK/)
+        )
+        .run(H1, thread),
+    /CHECK/
+  )
   // createDraft never writes lossy text either.
   s.createDraft(
-    { id: H2, thread_id: thread, source_session_id: null, source_agent: 'antigravity', target_agent: 'claude',
-      target_session_id: null, target_terminal_id: null, workspace_id: 'ws1', strategy: 'launch' },
-    pkg([], { lossy: true }), T0)
+    {
+      id: H2,
+      thread_id: thread,
+      source_session_id: null,
+      source_agent: 'antigravity',
+      target_agent: 'claude',
+      target_session_id: null,
+      target_terminal_id: null,
+      workspace_id: 'ws1',
+      strategy: 'launch'
+    },
+    pkg([], { lossy: true }),
+    T0
+  )
   assert.equal(status(s, H2).package, null)
 })
 

@@ -4,7 +4,10 @@ import * as panel from './panel'
 
 test('shows the placeholder empty state', async () => {
   const view = await mount(panel)
-  assert.ok(view.summary().some((line) => line.includes('Context Switcher')), view.summary().join('\n'))
+  assert.ok(
+    view.summary().some((line) => line.includes('Context Switcher')),
+    view.summary().join('\n')
+  )
   assert.deepEqual(view.errors, [])
   assert.deepEqual(view.refusals, [])
   await view.unmount()
