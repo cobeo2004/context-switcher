@@ -22,7 +22,8 @@ for (const c of cases) {
 
 const allowed = readFileSync('gate/public-exports.txt', 'utf8').split('\n').filter(Boolean).sort()
 const tagged = []
-for (const f of readdirSync('src')) {
+// Recursive: src/sources/ and later subdirs carry tags too.
+for (const f of readdirSync('src', { recursive: true }).filter((n) => /\.tsx?$/.test(n))) {
   const lines = readFileSync(`src/${f}`, 'utf8').split('\n')
   lines.forEach((l, i) => {
     if (!l.includes('@public')) return

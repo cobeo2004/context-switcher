@@ -61,6 +61,7 @@ export interface ParseResult {
 /** R7. v1 ships LocalSessionSource only. Every adapter read goes through it, including SQLite. */
 export interface SessionSource {
   list(dir: string): Promise<string[]>
+  dirs(dir: string): Promise<string[]> // real subdirectories only: symlinks are not followed
   stat(path: string): Promise<{ size: number; mtimeMs: number; dev: number; ino: number } | null>
   read(path: string, from?: number): Promise<Uint8Array> // bytes from offset to EOF
   /** Opens the live DB read-only and runs fn inside one read transaction (one WAL snapshot). No file copy. */
@@ -88,7 +89,6 @@ export class UnsupportedFormat extends Error {
     this.detail = detail
   }
 }
-/** @public PR3 adapter contract */
 export class SessionNotFound extends Error {}
 
 /** Rows (mirror the DDL). */

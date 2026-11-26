@@ -1,5 +1,4 @@
 Adapter
 MARKER_RE
-SessionNotFound
 ThreadRow
 UnsupportedFormat
