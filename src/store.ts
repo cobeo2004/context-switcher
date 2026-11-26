@@ -99,12 +99,31 @@ export type StoredTurn = TurnRow & { agent: string }
 /** A covered turn of one hand-off: 1 carried whole, 0 omitted or excerpted. */
 export type CoveredTurn = StoredTurn & { carried: 0 | 1 }
 
-export interface IngestContext { workspaceId: string | null; terminalId?: string | null; sourcePath?: string | null }
-export interface IngestResult { sessionId: number | null; threadId: string | null; inserted: number; warnings: string[] }
+export interface IngestContext {
+  workspaceId: string | null
+  terminalId?: string | null
+  sourcePath?: string | null
+}
+export interface IngestResult {
+  sessionId: number | null
+  threadId: string | null
+  inserted: number
+  warnings: string[]
+}
 
 /** The hand-off fields a caller decides; createDraft fills the rest from the package. */
-export type DraftInput = Pick<HandoffRow,
-  'id' | 'thread_id' | 'source_session_id' | 'source_agent' | 'target_agent' | 'target_session_id' | 'target_terminal_id' | 'workspace_id' | 'strategy'>
+export type DraftInput = Pick<
+  HandoffRow,
+  | 'id'
+  | 'thread_id'
+  | 'source_session_id'
+  | 'source_agent'
+  | 'target_agent'
+  | 'target_session_id'
+  | 'target_terminal_id'
+  | 'workspace_id'
+  | 'strategy'
+>
 
 export type ClaimResult = 'claimed' | 'already_run' | 'expired' | 'missing'
 
@@ -135,10 +154,18 @@ export function openStore(path: string) {
   const version = userVersion()
   if (version > SCHEMA_VERSION) {
     db.close()
-    throw new Error(`context-switcher: database ${path} has user_version ${version}, newer than this plugin understands (${SCHEMA_VERSION})`)
+    throw new Error(
+      `context-switcher: database ${path} has user_version ${version}, newer than this plugin understands (${SCHEMA_VERSION})`
+    )
   }
-  if (version < 1) tx(() => { db.exec(`${MIGRATION_1}\nPRAGMA user_version = 1;`) })
-  if (version < 2) tx(() => { db.exec(`${MIGRATION_2}\nPRAGMA user_version = 2;`) })
+  if (version < 1)
+    tx(() => {
+      db.exec(`${MIGRATION_1}\nPRAGMA user_version = 1;`)
+    })
+  if (version < 2)
+    tx(() => {
+      db.exec(`${MIGRATION_2}\nPRAGMA user_version = 2;`)
+    })
 
   const q = {
     session: db.prepare('SELECT * FROM sessions WHERE agent = ? AND native_id = ?'),
@@ -228,9 +255,17 @@ export function openStore(path: string) {
         const handoffId = t.handoffId && q.handoff.get(t.handoffId) ? t.handoffId : null
         const next = (q.nextOrd.get(threadId) as { next_ord: number }).next_ord
         const { ord } = q.upsertTurn.get(
-          threadId, session.id, threadId, t.nativeId, t.kind, t.text,
-          t.paths?.length ? JSON.stringify(t.paths) : null, t.tool ?? null,
-          t.handoffId ? 'handoff' : 'conversation', handoffId, t.at
+          threadId,
+          session.id,
+          threadId,
+          t.nativeId,
+          t.kind,
+          t.text,
+          t.paths?.length ? JSON.stringify(t.paths) : null,
+          t.tool ?? null,
+          t.handoffId ? 'handoff' : 'conversation',
+          handoffId,
+          t.at
         ) as { ord: number }
         if (ord === next) {
           q.bumpOrd.run(threadId)
@@ -238,7 +273,15 @@ export function openStore(path: string) {
         }
       }
       if (parse.activeNativeIds) q.reconcile.run(JSON.stringify(parse.activeNativeIds), session.id)
-      q.saveSession.run(JSON.stringify(parse.cursor), parse.formatVersion, parse.cwd ?? null, ctx.sourcePath ?? null, ctx.workspaceId, now, session.id)
+      q.saveSession.run(
+        JSON.stringify(parse.cursor),
+        parse.formatVersion,
+        parse.cwd ?? null,
+        ctx.sourcePath ?? null,
+        ctx.workspaceId,
+        now,
+        session.id
+      )
       q.touchThread.run(now, threadId)
       return { sessionId: session.id, threadId, inserted, warnings }
     })
@@ -252,9 +295,27 @@ export function openStore(path: string) {
            expires_at, created_at, updated_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?)`
       ).run(
-        row.id, row.thread_id, row.source_session_id, row.source_agent, row.target_agent, row.target_session_id, row.target_terminal_id,
-        row.workspace_id, row.strategy, pkg.mode, pkg.coveredFromOrd, pkg.coveredToOrd, pkg.selected, pkg.omitted, pkg.bytes,
-        pkg.text.length, pkg.lossy ? 1 : 0, pkg.lossy ? null : pkg.text, now + DRAFT_TTL_MS, now, now
+        row.id,
+        row.thread_id,
+        row.source_session_id,
+        row.source_agent,
+        row.target_agent,
+        row.target_session_id,
+        row.target_terminal_id,
+        row.workspace_id,
+        row.strategy,
+        pkg.mode,
+        pkg.coveredFromOrd,
+        pkg.coveredToOrd,
+        pkg.selected,
+        pkg.omitted,
+        pkg.bytes,
+        pkg.text.length,
+        pkg.lossy ? 1 : 0,
+        pkg.lossy ? null : pkg.text,
+        now + DRAFT_TTL_MS,
+        now,
+        now
       )
       const link = db.prepare('INSERT INTO handoff_turns (handoff_id, turn_id, carried) VALUES (?, ?, ?)')
       for (const turnId of pkg.selectedTurnIds) link.run(row.id, turnId, 1)
@@ -266,7 +327,9 @@ export function openStore(path: string) {
   /** draft → pending exactly once (§0.5), so a double click can't send twice. */
   function claimDraft(id: string, now = Date.now()): ClaimResult {
     return tx(() => {
-      const r = db.prepare("UPDATE handoffs SET status = 'pending', updated_at = ? WHERE id = ? AND status = 'draft' AND expires_at > ?").run(now, id, now)
+      const r = db
+        .prepare("UPDATE handoffs SET status = 'pending', updated_at = ? WHERE id = ? AND status = 'draft' AND expires_at > ?")
+        .run(now, id, now)
       if (Number(r.changes) === 1) return 'claimed'
       const h = q.handoff.get(id) as HandoffRow | undefined
       if (!h) return 'missing'
@@ -281,58 +344,76 @@ export function openStore(path: string) {
 
   /** §0.6 L.4: the text reached the target's input but was not submitted. Only a pending/unconfirmed row qualifies. */
   function setInInput(id: string, now = Date.now()): boolean {
-    return Number(db.prepare(
-      "UPDATE handoffs SET in_input = 1, updated_at = ? WHERE id = ? AND status IN ('pending','unconfirmed')"
-    ).run(now, id).changes) === 1
+    return (
+      Number(
+        db.prepare("UPDATE handoffs SET in_input = 1, updated_at = ? WHERE id = ? AND status IN ('pending','unconfirmed')").run(now, id)
+          .changes
+      ) === 1
+    )
   }
 
   /** §0.5 sweep: stale pending → unconfirmed, expired drafts → expired. Returns what changed. */
   function sweep(now = Date.now()): { id: string; status: HandoffStatus }[] {
     return tx(() => [
-      ...(db.prepare(
-        "UPDATE handoffs SET status = 'unconfirmed', package = NULL, updated_at = ? WHERE status = 'pending' AND updated_at <= ? RETURNING id, status"
-      ).all(now, now - PENDING_SWEEP_MS) as { id: string; status: HandoffStatus }[]),
-      ...(db.prepare(
-        "UPDATE handoffs SET status = 'expired', package = NULL, updated_at = ? WHERE status = 'draft' AND expires_at <= ? RETURNING id, status"
-      ).all(now, now) as { id: string; status: HandoffStatus }[])
+      ...(db
+        .prepare(
+          "UPDATE handoffs SET status = 'unconfirmed', package = NULL, updated_at = ? WHERE status = 'pending' AND updated_at <= ? RETURNING id, status"
+        )
+        .all(now, now - PENDING_SWEEP_MS) as { id: string; status: HandoffStatus }[]),
+      ...(db
+        .prepare(
+          "UPDATE handoffs SET status = 'expired', package = NULL, updated_at = ? WHERE status = 'draft' AND expires_at <= ? RETURNING id, status"
+        )
+        .all(now, now) as { id: string; status: HandoffStatus }[])
     ])
   }
 
   /** §0.2 delta by coverage. No watermark: anything not delivered to the target stays eligible. */
   function eligibleTurns(threadId: string, targetSessionId?: number): StoredTurn[] {
     if (targetSessionId === undefined) {
-      return db.prepare(
-        `SELECT t.*, s.agent FROM turns t JOIN sessions s ON s.id = t.session_id
+      return db
+        .prepare(
+          `SELECT t.*, s.agent FROM turns t JOIN sessions s ON s.id = t.session_id
          WHERE t.thread_id = ? AND t.source = 'conversation' AND t.active = 1 ORDER BY t.ord`
-      ).all(threadId) as StoredTurn[]
+        )
+        .all(threadId) as StoredTurn[]
     }
-    return db.prepare(
-      `SELECT t.*, s.agent FROM turns t JOIN sessions s ON s.id = t.session_id
+    return db
+      .prepare(
+        `SELECT t.*, s.agent FROM turns t JOIN sessions s ON s.id = t.session_id
        WHERE t.thread_id = ? AND t.source = 'conversation' AND t.active = 1 AND t.session_id <> ?
          AND t.id NOT IN (SELECT ht.turn_id FROM handoff_turns ht JOIN handoffs h ON h.id = ht.handoff_id
                           WHERE h.target_session_id = ? AND h.status = 'delivered' AND ht.carried = 1)
        ORDER BY t.ord`
-    ).all(threadId, targetSessionId, targetSessionId) as StoredTurn[]
+      )
+      .all(threadId, targetSessionId, targetSessionId) as StoredTurn[]
   }
 
   function threadTurns(threadId: string, after: number, limit: number): StoredTurn[] {
-    return db.prepare(
-      `SELECT t.*, s.agent FROM turns t JOIN sessions s ON s.id = t.session_id
+    return db
+      .prepare(
+        `SELECT t.*, s.agent FROM turns t JOIN sessions s ON s.id = t.session_id
        WHERE t.thread_id = ? AND t.ord > ? ORDER BY t.ord LIMIT ?`
-    ).all(threadId, after, limit) as StoredTurn[]
+      )
+      .all(threadId, after, limit) as StoredTurn[]
   }
 
   /** `thread-read --handoff`: the omitted/excerpted turns (default) or every covered turn (`full`), in ord order. */
   function coveredFor(handoffId: string, opts: { full?: boolean } = {}): CoveredTurn[] {
-    return db.prepare(
-      `SELECT t.*, s.agent, ht.carried FROM handoff_turns ht JOIN turns t ON t.id = ht.turn_id JOIN sessions s ON s.id = t.session_id
+    return db
+      .prepare(
+        `SELECT t.*, s.agent, ht.carried FROM handoff_turns ht JOIN turns t ON t.id = ht.turn_id JOIN sessions s ON s.id = t.session_id
        WHERE ht.handoff_id = ? AND (? OR ht.carried = 0) ORDER BY t.ord`
-    ).all(handoffId, opts.full ? 1 : 0) as CoveredTurn[]
+      )
+      .all(handoffId, opts.full ? 1 : 0) as CoveredTurn[]
   }
 
   function targetSessionFor(threadId: string, agent: string): SessionRow | null {
-    return (db.prepare('SELECT * FROM sessions WHERE thread_id = ? AND agent = ? ORDER BY updated_at DESC, id DESC LIMIT 1')
-      .get(threadId, agent) as SessionRow | undefined) ?? null
+    return (
+      (db
+        .prepare('SELECT * FROM sessions WHERE thread_id = ? AND agent = ? ORDER BY updated_at DESC, id DESC LIMIT 1')
+        .get(threadId, agent) as SessionRow | undefined) ?? null
+    )
   }
 
   /** R19: drop threads idle for `days` (cascades) and dead drafts. `days <= 0` keeps everything. Returns threads deleted. */
@@ -345,9 +426,23 @@ export function openStore(path: string) {
   }
 
   return {
-    db, path, userVersion, ingestParse, createDraft, claimDraft, setHandoffStatus, setInInput, sweep,
-    eligibleTurns, threadTurns, coveredFor, targetSessionFor, prune,
-    close: () => { db.close() }
+    db,
+    path,
+    userVersion,
+    ingestParse,
+    createDraft,
+    claimDraft,
+    setHandoffStatus,
+    setInInput,
+    sweep,
+    eligibleTurns,
+    threadTurns,
+    coveredFor,
+    targetSessionFor,
+    prune,
+    close: () => {
+      db.close()
+    }
   }
 }
 

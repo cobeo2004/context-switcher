@@ -18,8 +18,13 @@ turns[2] = { nativeId: 'n2', kind: 'file_change', text: '', paths: ['a.ts', 'b.t
 turns[3] = { nativeId: 'n3', kind: 'tool_call', text: '', tool: 'Grep', at: 0 }
 const { threadId } = store.ingestParse(
   { agent: 'claude', nativeId: 'A' },
-  { turns, cursor: { kind: 'offset', file: { path: '/x', dev: 1, ino: 1, size: 1 }, offset: 1 }, formatVersion: 'v1', markers: [],
-    activeNativeIds: turns.filter((t) => t.nativeId !== 'n4').map((t) => t.nativeId) },
+  {
+    turns,
+    cursor: { kind: 'offset', file: { path: '/x', dev: 1, ino: 1, size: 1 }, offset: 1 },
+    formatVersion: 'v1',
+    markers: [],
+    activeNativeIds: turns.filter((t) => t.nativeId !== 'n4').map((t) => t.nativeId)
+  },
   { workspaceId: 'ws1' }
 )
 store.close()

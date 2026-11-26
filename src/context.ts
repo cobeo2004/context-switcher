@@ -25,11 +25,16 @@ function pathsOf(t: RenderableTurn): string[] {
 export function renderTurn(t: RenderableTurn): string {
   const paths = pathsOf(t).join(', ')
   switch (t.kind) {
-    case 'user': return `User: ${t.text}`
-    case 'assistant': return `Assistant: ${t.text}`
-    case 'command': return `Command: ${t.text}`
-    case 'file_change': return `File change: ${paths}`
-    case 'tool_call': return `Tool: ${t.tool ?? 'unknown'}${paths ? ` ${paths}` : ''}`
+    case 'user':
+      return `User: ${t.text}`
+    case 'assistant':
+      return `Assistant: ${t.text}`
+    case 'command':
+      return `Command: ${t.text}`
+    case 'file_change':
+      return `File change: ${paths}`
+    case 'tool_call':
+      return `Tool: ${t.tool ?? 'unknown'}${paths ? ` ${paths}` : ''}`
   }
 }
 
@@ -59,11 +64,21 @@ export function selectTurns(turns: readonly RenderableTurn[], budget: number, he
 }
 
 const EXCERPT_MIN = 120 // §0.3 rule E: below this much room an excerpt is not worth carrying
-interface Excerpt { index: number; head: string; tail: string; cut: number }
+interface Excerpt {
+  index: number
+  head: string
+  tail: string
+  cut: number
+}
 const renderExcerpt = (text: string, e: Excerpt) =>
   `User (excerpt: ${text.length} chars, cut ${e.cut}; full text via the command below): ${e.head}\n[… ${e.cut} chars cut …]\n${e.tail}`
 
-export function planDigest(turns: readonly RenderableTurn[], budget: number, header: CountedText, footer: CountedText): { picked: number[]; excerpt?: Excerpt } {
+export function planDigest(
+  turns: readonly RenderableTurn[],
+  budget: number,
+  header: CountedText,
+  footer: CountedText
+): { picked: number[]; excerpt?: Excerpt } {
   const index = turns.map((t) => t.kind).lastIndexOf('user')
   const remaining = envelopeRemaining(turns.length, budget, header, footer)
   const fallback = () => ({ picked: selectTurns(turns, budget, header, footer) })
@@ -75,7 +90,7 @@ export function planDigest(turns: readonly RenderableTurn[], budget: number, hea
   for (;;) {
     const room = excerptBudget - renderExcerpt(text, { ...excerpt, head: '', tail: '' }).length - 1
     if (room < EXCERPT_MIN) return fallback()
-    let headEnd = Math.ceil(2 * room / 3)
+    let headEnd = Math.ceil((2 * room) / 3)
     let tailStart = text.length - (room - headEnd)
     if (/[\uD800-\uDBFF]/.test(text[headEnd - 1]) && /[\uDC00-\uDFFF]/.test(text[headEnd])) headEnd--
     if (/[\uD800-\uDBFF]/.test(text[tailStart - 1]) && /[\uDC00-\uDFFF]/.test(text[tailStart])) tailStart++
@@ -90,7 +105,15 @@ export function threadReadCommand(handoffId: string): string {
   return `node ~/.context-switcher/bin/thread-read.mjs --handoff ${handoffId}`
 }
 
-interface PackageMeta { threadId: string; handoffId: string; sourceAgent: string; mode: 'full' | 'delta'; lossy: boolean; unavailable?: boolean; omittedLines?: number }
+interface PackageMeta {
+  threadId: string
+  handoffId: string
+  sourceAgent: string
+  mode: 'full' | 'delta'
+  lossy: boolean
+  unavailable?: boolean
+  omittedLines?: number
+}
 
 /** §0.3 text. */
 function headerFor(m: PackageMeta): CountedText {
@@ -102,22 +125,29 @@ function headerFor(m: PackageMeta): CountedText {
 }
 function footerFor(m: PackageMeta): CountedText {
   return (_selected, omitted) =>
-    (m.lossy ? `Omitted ${m.omittedLines ?? 0} earlier screen lines; screen captures are not stored.\n` : m.unavailable ? `Omitted ${omitted} turns; the history database is unavailable, so they cannot be read back.\n` : `Omitted ${omitted} turns. Read them with: ${threadReadCommand(m.handoffId)}\n`) +
+    (m.lossy
+      ? `Omitted ${m.omittedLines ?? 0} earlier screen lines; screen captures are not stored.\n`
+      : m.unavailable
+        ? `Omitted ${omitted} turns; the history database is unavailable, so they cannot be read back.\n`
+        : `Omitted ${omitted} turns. Read them with: ${threadReadCommand(m.handoffId)}\n`) +
     'Summarise where we are in 3 lines, then wait for the user.'
 }
 
 export function renderPackage(turns: readonly RenderableTurn[], selected: readonly number[], m: PackageMeta, excerpt?: Excerpt): string {
-  const body = [...selected, ...(excerpt ? [excerpt.index] : [])].sort((a, b) => a - b).map((i) => excerpt?.index === i ? renderExcerpt(turns[i].text, excerpt) : renderTurn(turns[i])).join('\n')
-  return [headerFor(m)(selected.length, turns.length - selected.length), body, footerFor(m)(selected.length, turns.length - selected.length)]
+  const body = [...selected, ...(excerpt ? [excerpt.index] : [])]
+    .sort((a, b) => a - b)
+    .map((i) => (excerpt?.index === i ? renderExcerpt(turns[i].text, excerpt) : renderTurn(turns[i])))
+    .join('\n')
+  return [
+    headerFor(m)(selected.length, turns.length - selected.length),
+    body,
+    footerFor(m)(selected.length, turns.length - selected.length)
+  ]
     .filter(Boolean)
     .join('\n\n')
 }
 
-function assemble(
-  turns: readonly (RenderableTurn & { id?: number; ord?: number })[],
-  budget: number,
-  m: PackageMeta
-): ContextPackage {
+function assemble(turns: readonly (RenderableTurn & { id?: number; ord?: number })[], budget: number, m: PackageMeta): ContextPackage {
   if (!Number.isFinite(budget) || budget < 1024) throw new RangeError('Context budget must be finite and at least 1024')
   const cap = Math.min(budget, HARD_CAP)
   const { picked, excerpt } = planDigest(turns, cap, headerFor(m), footerFor(m))
@@ -129,7 +159,12 @@ function assemble(
     bytes: byteLength(text),
     mode: m.mode,
     selectedTurnIds: m.lossy ? [] : picked.map((i) => turns[i].id).filter((id): id is number => id !== undefined),
-    omittedTurnIds: m.lossy ? [] : turns.filter((_, i) => !picked.includes(i)).map((t) => t.id).filter((id): id is number => id !== undefined),
+    omittedTurnIds: m.lossy
+      ? []
+      : turns
+          .filter((_, i) => !picked.includes(i))
+          .map((t) => t.id)
+          .filter((id): id is number => id !== undefined),
     selected: picked.length,
     omitted: turns.length - picked.length,
     coveredFromOrd: ords.length ? Math.min(...ords) : null,
@@ -164,7 +199,10 @@ export function buildFromTurns(
   if (opts.lossy && eligible.length === 1 && (turns.length === 1 || eligible[0].kind === 'assistant')) {
     // §0.3 lossy: keep the newest m lines that fit. Rendered length grows with m, so binary-search it.
     const lines = eligible[0].text.split('\n')
-    const newest = (m: number) => ({ ...eligible[0], text: `Screen capture: newest ${m} of ${lines.length} lines\n${lines.slice(lines.length - m).join('\n')}` })
+    const newest = (m: number) => ({
+      ...eligible[0],
+      text: `Screen capture: newest ${m} of ${lines.length} lines\n${lines.slice(lines.length - m).join('\n')}`
+    })
     const fits = (m: number) => {
       const captureMeta = { ...meta, omittedLines: lines.length - m }
       return selectTurns([newest(m)], Math.min(opts.budget, HARD_CAP), headerFor(captureMeta), footerFor(captureMeta)).length === 1
@@ -176,7 +214,9 @@ export function buildFromTurns(
       if (fits(mid)) lo = mid
       else hi = mid - 1
     }
-    return lo ? assemble([newest(lo)], opts.budget, { ...meta, omittedLines: lines.length - lo }) : assemble([], opts.budget, { ...meta, omittedLines: lines.length })
+    return lo
+      ? assemble([newest(lo)], opts.budget, { ...meta, omittedLines: lines.length - lo })
+      : assemble([], opts.budget, { ...meta, omittedLines: lines.length })
   }
   return assemble(eligible, opts.budget, meta)
 }

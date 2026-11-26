@@ -1,0 +1,5 @@
+.sstack/
+package-lock.json
+reports/
+.stryker-tmp/
+semgrep/
