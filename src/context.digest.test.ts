@@ -82,7 +82,7 @@ test('rule E: an oversized last user turn is excerpted head + tail with the true
   const tail = /chars cut …\]\n(q* TAIL-MARK)\n/.exec(pkg.text)![1]
   assert.equal(k, big.length - head.length - tail.length)
   assert.ok(pkg.text.includes(`User (excerpt: ${big.length} chars, cut ${k}; full text via the command below): `))
-  assert.ok(pkg.omittedTurnIds!.includes(3))
+  assert.ok(pkg.omittedTurnIds.includes(3))
   assert.ok(!pkg.selectedTurnIds.includes(3))
   assert.ok(pkg.selectedTurnIds.includes(4)) // last assistant fits in the remaining 40 %
   assert.ok(pkg.text.includes('Assistant: LAST-ASSIST'))
@@ -120,7 +120,7 @@ test('footers: --handoff command, lossy without command, DB unavailable', () => 
   const lines = Array.from({ length: 3000 }, (_, i) => `line-${i}`)
   const lossy = buildFromTurns([turn('assistant', lines.join('\n'))], { ...opts, lossy: true })
   assert.ok(lossy.text.length <= 4096)
-  assert.ok(lossy.text.endsWith('line-2999\n\n' + lossy.text.split('\n\n').pop()))
+  assert.ok(lossy.text.endsWith('line-2999\n\n' + (lossy.text.split('\n\n').pop() ?? '')))
   assert.ok(!lossy.text.includes('\nline-0\n'))
   const m = Number(/Screen capture: newest (\d+) of 3000 lines/.exec(lossy.text)?.[1])
   assert.ok(m > 0 && m < 3000)

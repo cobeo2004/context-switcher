@@ -59,7 +59,7 @@ export function selectTurns(turns: readonly RenderableTurn[], budget: number, he
 }
 
 const EXCERPT_MIN = 120 // §0.3 rule E: below this much room an excerpt is not worth carrying
-type Excerpt = { index: number; head: string; tail: string; cut: number }
+interface Excerpt { index: number; head: string; tail: string; cut: number }
 const renderExcerpt = (text: string, e: Excerpt) =>
   `User (excerpt: ${text.length} chars, cut ${e.cut}; full text via the command below): ${e.head}\n[… ${e.cut} chars cut …]\n${e.tail}`
 

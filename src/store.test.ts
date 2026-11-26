@@ -80,7 +80,7 @@ test('re-ingesting the same parse adds nothing', () => {
   const first = ingest(s, 'claude', 'A', p)
   ingest(s, 'claude', 'A', p)
   assert.equal(s.threadTurns(first.threadId!, 0, 100).length, 2)
-  const t = s.db.prepare('SELECT next_ord FROM threads WHERE id = ?').get(first.threadId!) as { next_ord: number }
+  const t = s.db.prepare('SELECT next_ord FROM threads WHERE id = ?').get(first.threadId) as { next_ord: number }
   assert.equal(t.next_ord, 3)
 })
 
@@ -119,7 +119,7 @@ test('a marker hit for another agent or workspace starts a new thread and leaves
   const wrongTerm = ingest(s, 'codex', 'C', [turn('m#0', 'user', { handoffId: H1 })], { markers: [marker(H1, thread)] }, { workspaceId: 'ws1', terminalId: 'other' })
   assert.notEqual(wrongTerm.threadId, thread)
   assert.equal(status(s, H1).status, 'pending')
-  const m = s.db.prepare("SELECT source FROM turns WHERE native_id = 'm#0' AND session_id = ?").get(wrongAgent.sessionId!) as { source: string }
+  const m = s.db.prepare("SELECT source FROM turns WHERE native_id = 'm#0' AND session_id = ?").get(wrongAgent.sessionId) as { source: string }
   assert.equal(m.source, 'handoff')
 })
 

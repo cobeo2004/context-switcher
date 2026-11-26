@@ -137,8 +137,8 @@ export function openStore(path: string) {
     db.close()
     throw new Error(`context-switcher: database ${path} has user_version ${version}, newer than this plugin understands (${SCHEMA_VERSION})`)
   }
-  if (version < 1) tx(() => db.exec(`${MIGRATION_1}\nPRAGMA user_version = 1;`))
-  if (version < 2) tx(() => db.exec(`${MIGRATION_2}\nPRAGMA user_version = 2;`))
+  if (version < 1) tx(() => { db.exec(`${MIGRATION_1}\nPRAGMA user_version = 1;`) })
+  if (version < 2) tx(() => { db.exec(`${MIGRATION_2}\nPRAGMA user_version = 2;`) })
 
   const q = {
     session: db.prepare('SELECT * FROM sessions WHERE agent = ? AND native_id = ?'),
@@ -347,7 +347,7 @@ export function openStore(path: string) {
   return {
     db, path, userVersion, ingestParse, createDraft, claimDraft, setHandoffStatus, setInInput, sweep,
     eligibleTurns, threadTurns, coveredFor, targetSessionFor, prune,
-    close: () => db.close()
+    close: () => { db.close() }
   }
 }
 

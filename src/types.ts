@@ -47,6 +47,7 @@ export interface SessionSource {
 }
 export interface SqliteReader { all(sql: string, ...params: (string | number)[]): Record<string, unknown>[] }
 
+/** @public PR3 adapter contract */
 export interface Adapter {
   agent: AdapterAgent
   formatVersion: string                                                   // declared, e.g. 'pi-session-v3' (R5)
@@ -54,12 +55,15 @@ export interface Adapter {
   parse(src: SessionSource, path: string, cursor: Cursor | null): Promise<ParseResult>                               // throws UnsupportedFormat
 }
 
+/** @public PR3 adapter contract */
 export class UnsupportedFormat extends Error { constructor(readonly agent: string, readonly detail: string) { super(`${agent}: unsupported session format (${detail})`) } }
+/** @public PR3 adapter contract */
 export class SessionNotFound extends Error {}
 
 export type HandoffStatus = 'draft' | 'pending' | 'delivered' | 'unconfirmed' | 'failed' | 'expired'   // R15 widened, §3 decision 6
 
 /** Rows (mirror the DDL). */
+/** @public PR3 adapter contract */
 export interface ThreadRow   { id: string; created_at: number; updated_at: number; next_ord: number }
 export interface SessionRow  { id: number; agent: string; native_id: string; thread_id: string; workspace_id: string | null; cwd: string | null;
                                source_path: string | null; format_version: string | null; cursor: string | null /* JSON Cursor */;
@@ -96,4 +100,5 @@ export const DRAFT_TTL_MS = 10 * 60_000
 export const PENDING_SWEEP_MS = 10 * 60_000     // pending older than this ⇒ unconfirmed
 /** First line: `[context-switcher handoff h_<uuid> thread t_<uuid>]`. Must not start with '<': the Claude and Codex adapters drop user text starting with '<' as injected. */
 export const HANDOFF_MARKER = '[context-switcher handoff '
+/** @public PR3 adapter contract */
 export const MARKER_RE = /\[context-switcher handoff (h_[0-9a-f-]{36}) thread (t_[0-9a-f-]{36})\]/
