@@ -1,0 +1,55 @@
+name: mutation
+on:
+  pull_request:
+  schedule:
+    - cron: '41 2 * * *'
+  workflow_dispatch:
+permissions: {}
+concurrency:
+  group: mutation-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+jobs:
+  stryker:
+    # Required check. Runs on every PR; finishes green at once when no input of the mutation score changed.
+    name: mutation
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    permissions:
+      contents: read # checkout only
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 2 # the PR merge commit and its base parent
+      - id: inputs
+        name: did an input of the mutation score change?
+        env:
+          EVENT: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          # Any src/ file (tests import production code beyond the mutated files), any test Orca discovers, and the tooling.
+          re='^(src/|stryker\.config\.json$|package(-lock)?\.json$|\.npmrc$|tsconfig\.json$|orca-plugin\.json$|scripts/setup-orca\.sh$|\.github/workflows/mutation\.yml$)|\.test\.[cm]?[jt]sx?$'
+          if [ "$EVENT" != pull_request ]; then run=true
+          else
+            changed=$(git diff --no-renames --name-only HEAD^1 HEAD) # set -e: a failed diff fails the job, never a silent skip
+            if grep -Eq "$re" <<<"$changed"; then run=true
+            else run=false; echo "No mutation input changed; nothing to run."; fi
+          fi
+          echo "run=$run" >> "$GITHUB_OUTPUT"
+      - if: steps.inputs.outputs.run == 'true'
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: npm
+      - if: steps.inputs.outputs.run == 'true'
+        run: npm ci --ignore-scripts
+      - if: steps.inputs.outputs.run == 'true'
+        run: bash scripts/setup-orca.sh
+      - if: steps.inputs.outputs.run == 'true'
+        run: npm run mutation
+      - if: always() && steps.inputs.outputs.run == 'true'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: mutation-report
+          path: reports/mutation/
+          retention-days: 14

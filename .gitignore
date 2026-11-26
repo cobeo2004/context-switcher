@@ -118,3 +118,5 @@ node_modules/
 .omc/
 .sstack/runs/
 .sstack/local/
+reports/
+.stryker-tmp/
