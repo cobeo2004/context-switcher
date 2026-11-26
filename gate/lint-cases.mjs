@@ -2,6 +2,7 @@
 // (rule ids; 'inline-config' = the noInlineConfig warning). `expect: []` is a good control: any diagnostic fails it.
 const pre = `export declare function save(): Promise<void>\nexport declare const anyValue: unknown\nexport declare const maybe: { id: string } | undefined\n`
 const ts = (body) => `${pre}${body}\n`
+const DB = `import { DatabaseSync } from 'node:sqlite'\nconst db = new DatabaseSync('/x', { readOnly: true })`
 
 export default [
   // Type-aware policy rules (virtual gate/*.ts files use the default project).
@@ -179,6 +180,143 @@ export default [
     name: 'fs/promises',
     path: 'src/worker.ts',
     code: `import { writeFile } from 'node:fs/promises'\nexport { writeFile }\n`,
+    expect: ['no-restricted-imports']
+  },
+  {
+    name: 'sqlite in sessionSource (read-only foreign DBs)',
+    path: 'src/sources/sessionSource.ts',
+    code: `import { DatabaseSync } from 'node:sqlite'\nexport const db = new DatabaseSync('/x', { readOnly: true })\n`,
+    expect: []
+  },
+  {
+    name: 'sqlite in another source',
+    path: 'src/sources/claude.ts',
+    code: `import { DatabaseSync } from 'node:sqlite'\nexport { DatabaseSync }\n`,
+    expect: ['no-restricted-imports']
+  },
+  {
+    name: 'fs/promises read outside sessionSource',
+    path: 'src/sources/claude.ts',
+    code: `import { readdir } from 'node:fs/promises'\nexport { readdir }\n`,
+    expect: ['no-restricted-imports']
+  },
+  {
+    name: 'fs/promises allowlisted name outside sessionSource',
+    path: 'src/context.ts',
+    code: `import { existsSync } from 'node:fs/promises'\nexport { existsSync }\n`,
+    expect: ['no-restricted-imports']
+  },
+  {
+    name: 'fs/promises reads in sessionSource',
+    path: 'src/sources/sessionSource.ts',
+    code: `import { open, readdir, stat } from 'node:fs/promises'\nexport class S {\n  stat(p: string) {\n    return stat(p)\n  }\n  dirs(p: string) {\n    return readdir(p, { withFileTypes: true })\n  }\n  async read(p: string) {\n    const h = await open(p, 'r')\n    await h.stat()\n  }\n}\n`,
+    expect: []
+  },
+  // sessionSource.ts read-only call shapes (review PR4a): each evasion below once passed lint and Semgrep.
+  ...[
+    ['sqlite import renamed', `import { DatabaseSync as DB } from 'node:sqlite'\nexport const db = new DB('/x', { readOnly: true })`],
+    [
+      'sqlite constructor value alias',
+      `import { DatabaseSync } from 'node:sqlite'\nconst DB = DatabaseSync\nexport const db = new DB('/x')`
+    ],
+    [
+      'sqlite namespace import',
+      `import * as sqlite from 'node:sqlite'\nexport const db = new sqlite.DatabaseSync('/x', { readOnly: true })`,
+      2
+    ],
+    ['sqlite default import', `import sqlite from 'node:sqlite'\nexport { sqlite }`],
+    ['sqlite re-export', `export { DatabaseSync } from 'node:sqlite'`, 3],
+    ['sqlite export star', `export * from 'node:sqlite'`],
+    ['sqlite no options', `import { DatabaseSync } from 'node:sqlite'\nexport const db = new DatabaseSync('/x')`],
+    ['sqlite readOnly: false', `import { DatabaseSync } from 'node:sqlite'\nexport const db = new DatabaseSync('/x', { readOnly: false })`],
+    [
+      "sqlite readOnly: 'true'",
+      `import { DatabaseSync } from 'node:sqlite'\nexport const db = new DatabaseSync('/x', { readOnly: 'true' })`
+    ],
+    [
+      'sqlite options variable',
+      `import { DatabaseSync } from 'node:sqlite'\nconst o = { readOnly: true }\nexport const db = new DatabaseSync('/x', o)`
+    ],
+    [
+      'sqlite spread after',
+      `import { DatabaseSync } from 'node:sqlite'\ndeclare const o: object\nexport const db = new DatabaseSync('/x', { readOnly: true, ...o })`
+    ],
+    [
+      'sqlite spread before',
+      `import { DatabaseSync } from 'node:sqlite'\ndeclare const o: object\nexport const db = new DatabaseSync('/x', { ...o, readOnly: true })`
+    ],
+    [
+      'sqlite computed key',
+      `import { DatabaseSync } from 'node:sqlite'\nconst readOnly = 'x'\nexport const db = new DatabaseSync('/x', { [readOnly]: true })`
+    ],
+    [
+      'sqlite shorthand',
+      `import { DatabaseSync } from 'node:sqlite'\nconst readOnly = false\nexport const db = new DatabaseSync('/x', { readOnly })`
+    ],
+    [
+      'sqlite spread arguments',
+      `import { DatabaseSync } from 'node:sqlite'\ndeclare const a: [string]\nexport const db = new DatabaseSync(...a)`
+    ],
+    ['open flag via as', `import { open } from 'node:fs/promises'\nexport const h = open('/x', 'w' as 'r')`],
+    ['open flag variable', `import { open } from 'node:fs/promises'\nconst f = 'r'\nexport const h = open('/x', f)`],
+    ['open flag w', `import { open } from 'node:fs/promises'\nexport const h = open('/x', 'w')`],
+    ['open no flag', `import { open } from 'node:fs/promises'\nexport const h = open('/x')`],
+    ['open spread arguments', `import { open } from 'node:fs/promises'\ndeclare const a: [string, 'r']\nexport const h = open(...a)`],
+    ['open value alias', `import { open } from 'node:fs/promises'\nconst o = open\nexport const h = o('/x', 'w')`],
+    ['open via .call', `import { open } from 'node:fs/promises'\nexport const h = open.call(null, '/x', 'w')`],
+    ['open import renamed', `import { open as o } from 'node:fs/promises'\nexport const h = o('/x', 'w')`],
+    ['open renamed to stat', `import { open as stat } from 'node:fs/promises'\nexport const h = stat('/x', 'w')`],
+    ['readdir value alias', `import { readdir } from 'node:fs/promises'\nexport const r = readdir`],
+    ['stat import renamed', `import { stat as s } from 'node:fs/promises'\nexport const r = s('/x')`],
+    ['fs/promises export star', `export * from 'node:fs/promises'`, 1, ['no-restricted-imports']],
+    // Capability recovery from a permitted value (review2 PR4a): each passed lint, TypeScript and Semgrep.
+    ['sqlite db.constructor', `${DB}\nconst C = db.constructor as new (p: string) => unknown\nexport const w = new C('/x')`],
+    ['sqlite new db.constructor', `${DB}\nexport const w = new (db.constructor as new (p: string) => unknown)('/x')`],
+    ["sqlite db['constructor']", `${DB}\nexport const w = new (db['constructor'] as new (p: string) => unknown)('/x')`],
+    ['sqlite db[`constructor`]', `${DB}\nexport const w = db[\`constructor\`]`],
+    ['sqlite destructured constructor', `${DB}\nexport const { constructor: C } = db`],
+    ['sqlite DatabaseSync.prototype', `import { DatabaseSync } from 'node:sqlite'\nexport const p = DatabaseSync.prototype`, 2],
+    ['sqlite __proto__', `${DB}\nexport const p = (db as unknown as { __proto__: unknown }).__proto__`, 2],
+    ['Reflect.construct', `${DB}\nexport const w = Reflect.construct(Object, [db])`],
+    ['Reflect.apply', `${DB}\nexport const w = Reflect.apply(Object, null, [db])`],
+    ['Object.getPrototypeOf', `${DB}\nexport const p = Object.getPrototypeOf(db)`],
+    [
+      'globalThis getBuiltinModule',
+      `const p = globalThis as unknown as { process: { getBuiltinModule(s: string): { 'writeFileSync': (p: string) => void } } }\nexport const bad = () => p.process.getBuiltinModule('node:fs').writeFileSync('/x')`,
+      5
+    ],
+    [
+      'handle truncate via assertion',
+      `import { open } from 'node:fs/promises'\nexport async function f() {\n  const h = await open('/x', 'r')\n  await (h as unknown as { truncate(n: number): Promise<void> }).truncate(0)\n}`,
+      2
+    ],
+    [
+      'handle chmod via assertion',
+      `import { open } from 'node:fs/promises'\nexport async function f() {\n  const h = await open('/x', 'r')\n  await (h as unknown as { chmod(m: number): Promise<void> }).chmod(0o666)\n}`,
+      2
+    ]
+  ].map(([name, code, n = 1, extra = []]) => ({
+    name: `sessionSource: ${name}`,
+    path: 'src/sources/sessionSource.ts',
+    code: `${code}\n`,
+    expect: [...extra, ...Array.from({ length: n }, () => 'no-restricted-syntax')]
+  })),
+  {
+    name: 'fs/promises write in sessionSource',
+    path: 'src/sources/sessionSource.ts',
+    code: `import { writeFile } from 'node:fs/promises'\nexport { writeFile }\n`,
+    expect: ['no-restricted-imports', ...Array.from({ length: 5 }, () => 'no-restricted-syntax')]
+  },
+  {
+    name: 'fs/promises namespace in sessionSource',
+    path: 'src/sources/sessionSource.ts',
+    code: `import * as fsp from 'node:fs/promises'\nexport { fsp }\n`,
+    expect: ['no-restricted-imports', 'no-restricted-syntax']
+  },
+  {
+    name: 'sync fs write in sessionSource',
+    path: 'src/sources/sessionSource.ts',
+    code: `import { writeFileSync } from 'node:fs'\nexport function f(p: string) {\n  writeFileSync(p, '', { mode: 0o600 })\n}\n`,
     expect: ['no-restricted-imports']
   },
   {
