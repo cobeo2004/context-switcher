@@ -212,8 +212,8 @@ test('coverage: turns from unconfirmed or failed hand-offs, and omitted turns, s
   const b = ingest(s, 'codex', 'B', [turn('B:1')])
   const [t1, t2] = s.eligibleTurns(thread, b.sessionId!).map((t) => t.id)
   // H1 carried A:1 but never got confirmed; H2 carried A:2 and failed. A:3 was omitted by both.
-  draft(s, H1, thread, 'codex', [t1], T0, { target_session_id: b.sessionId })
-  draft(s, H2, thread, 'codex', [t2], T0, { target_session_id: b.sessionId })
+  draft(s, H1, thread, 'codex', [t1!], T0, { target_session_id: b.sessionId })
+  draft(s, H2, thread, 'codex', [t2!], T0, { target_session_id: b.sessionId })
   s.setHandoffStatus(H1, 'unconfirmed', null, T0)
   s.setHandoffStatus(H2, 'failed', 'boom', T0)
   assert.deepEqual(texts(s.eligibleTurns(thread, b.sessionId!)), ['A:1', 'A:2', 'A:3'])

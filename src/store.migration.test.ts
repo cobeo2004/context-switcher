@@ -103,7 +103,7 @@ test('CHECKs: chars 4097, in_input 2 and carried 2 are rejected', () => {
   assert.throws(() => ins(4097, 0), /CHECK/)
   assert.throws(() => ins(0, 2), /CHECK/)
   ins(4096, 1)
-  const turnId = s.eligibleTurns(thread)[0].id
+  const turnId = s.eligibleTurns(thread)[0]!.id
   assert.throws(
     () => s.db.prepare("INSERT INTO handoff_turns (handoff_id, turn_id, carried) VALUES ('h_4096_1', ?, 2)").run(turnId),
     /CHECK/
@@ -115,7 +115,7 @@ test("createDraft writes chars and carried 0 rows; omitted turns stay in a deliv
   const a = s.ingestParse({ agent: 'claude', nativeId: 'A' }, parse([turn('A:1'), turn('A:2'), turn('A:3')]), WS, T0)
   const thread = a.threadId!
   const [a1, a2, a3] = s.eligibleTurns(thread).map((t) => t.id)
-  draft(s, H1, thread, [a1, a3], [a2], 'é😀x')
+  draft(s, H1, thread, [a1!, a3!], [a2!], 'é😀x')
   assert.equal((s.db.prepare('SELECT chars FROM handoffs WHERE id = ?').get(H1) as { chars: number }).chars, 4)
   s.claimDraft(H1, T0 + 1)
   const b = s.ingestParse(

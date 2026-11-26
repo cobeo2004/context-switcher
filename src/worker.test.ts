@@ -7,8 +7,8 @@ import * as main from './worker'
 
 test('diag reports schema version, file modes and the installed CLI', async () => {
   const home = mkdtempSync(join(tmpdir(), 'cs-home-'))
-  const prev = process.env.HOME
-  process.env.HOME = home
+  const prev = process.env['HOME']
+  process.env['HOME'] = home
   try {
     const worker = await mountWorker(main, { host: mockHost({ settings: { retentionDays: 90, budgetBytes: 32768 } }) })
     const diag = await worker.request('diag')
@@ -23,6 +23,6 @@ test('diag reports schema version, file modes and the installed CLI', async () =
     assert.deepEqual(worker.refusals, [])
     await worker.deactivate()
   } finally {
-    process.env.HOME = prev
+    process.env['HOME'] = prev
   }
 })

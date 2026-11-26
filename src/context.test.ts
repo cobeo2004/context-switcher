@@ -43,7 +43,7 @@ function longThread(s: Store, oversized = false) {
 }
 const input = (threadId: string, budget = 32768, sessionId?: number) => ({
   threadId,
-  target: { agent: 'codex', sessionId },
+  target: { agent: 'codex', ...(sessionId === undefined ? {} : { sessionId }) },
   budget,
   purpose: 'switch' as const,
   handoffId: H2
@@ -94,7 +94,7 @@ test('selectTurns follows T3 order: last user, last assistant, first user, then 
     { kind: 'user', text: 'u4' },
     { kind: 'command', text: 'c5' }
   ] as const
-  const cost = (i: number) => bytes(renderTurn(turns[i])) + 1
+  const cost = (i: number) => bytes(renderTurn(turns[i]!)) + 1
   // Room for exactly three turns: u4 (last user), a3 (last assistant), u0 (first user).
   const budget = cost(4) + cost(3) + cost(0) + 4
   assert.deepEqual(

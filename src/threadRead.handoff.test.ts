@@ -90,7 +90,7 @@ const chunks = (page: string) =>
     a: Number(m[2]),
     b: Number(m[3]),
     n: Number(m[4]),
-    text: m[5]
+    text: m[5]!
   }))
 const LONE = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/
 
@@ -117,11 +117,11 @@ test('large metadata pages forward without losing text or metadata', () => {
           assert.equal(ms.map((m) => m[4]).join(''), meta)
           for (const m of ms) {
             assert.equal(Number(m[3]), meta.length)
-            assert.equal(Number(m[2]) - Number(m[1]) + 1, m[4].length)
-            assert.ok(!LONE.test(m[4]))
+            assert.equal(Number(m[2]) - Number(m[1]) + 1, m[4]!.length)
+            assert.ok(!LONE.test(m[4]!))
           }
           const offsets = ps.slice(0, -1).map((p) => Number(/--offset (\d+)$/.exec(p.trimEnd())![1]))
-          assert.ok(offsets.every((o, i) => o > 0 && (i === 0 || o > offsets[i - 1])))
+          assert.ok(offsets.every((o, i) => o > 0 && (i === 0 || o > offsets[i - 1]!)))
         }
 })
 
@@ -133,9 +133,9 @@ test('exact set: carried {1, 9, 10}, omitted 2–8 → prints #2–#8 once, head
   )
   const ps = pages(['--handoff', h])
   assert.equal(ps.length, 1)
-  assert.equal(ps[0].split('\n')[0], `# hand-off ${h} thread ${thread}: 7 turns (omitted)`)
-  assert.deepEqual(wholeOrds(ps[0]), range(2, 8))
-  assert.ok(ps[0].includes('#2 assistant [claude]: turn 2\n'))
+  assert.equal(ps[0]!.split('\n')[0], `# hand-off ${h} thread ${thread}: 7 turns (omitted)`)
+  assert.deepEqual(wholeOrds(ps[0]!), range(2, 8))
+  assert.ok(ps[0]!.includes('#2 assistant [claude]: turn 2\n'))
 })
 
 test('--full multi-page: every next line keeps --full, union is exactly 1…10 with no repeats', () => {
@@ -146,7 +146,7 @@ test('--full multi-page: every next line keeps --full, union is exactly 1…10 w
   )
   const ps = pages(['--handoff', h, '--full'])
   assert.ok(ps.length >= 2, String(ps.length))
-  assert.ok(ps[0].startsWith(`# hand-off ${h} thread `) && ps[0].split('\n')[0].endsWith(': 10 turns (full)'))
+  assert.ok(ps[0]!.startsWith(`# hand-off ${h} thread `) && ps[0]!.split('\n')[0]!.endsWith(': 10 turns (full)'))
   for (const p of ps.slice(0, -1)) assert.ok(p.trimEnd().split('\n').pop()!.includes(' --full '), p.slice(-200))
   assert.deepEqual(ps.flatMap(wholeOrds), range(1, 10))
 })
@@ -158,8 +158,8 @@ test('default multi-page: 12 omitted turns of 1500 chars → 5 on the first page
     range(2, 13)
   )
   const ps = pages(['--handoff', h])
-  assert.deepEqual(wholeOrds(ps[0]), range(2, 6))
-  assert.ok(ps[0].trimEnd().endsWith(`next: node ~/.context-switcher/bin/thread-read.mjs --handoff ${h} --after 6`), ps[0].slice(-200))
+  assert.deepEqual(wholeOrds(ps[0]!), range(2, 6))
+  assert.ok(ps[0]!.trimEnd().endsWith(`next: node ~/.context-switcher/bin/thread-read.mjs --handoff ${h} --after 6`), ps[0]!.slice(-200))
   assert.deepEqual(ps.flatMap(wholeOrds), range(2, 13))
 })
 
@@ -184,11 +184,11 @@ test('one huge turn: 20 000 chars → 3 pages, chunks rejoin to the exact text, 
     cs.map((c) => c.n),
     [20_000, 20_000, 20_000]
   )
-  assert.equal(cs[0].a, 1)
-  assert.equal(cs[2].b, 20_000)
+  assert.equal(cs[0]!.a, 1)
+  assert.equal(cs[2]!.b, 20_000)
   const offsets = ps.slice(0, -1).map((p) => Number(/--after 1 --offset (\d+)$/.exec(p.trimEnd())![1]))
-  assert.ok(offsets[0] > 0 && offsets[1] > offsets[0], offsets.join(','))
-  assert.deepEqual(offsets, [cs[0].b, cs[1].b])
+  assert.ok(offsets[0]! > 0 && offsets[1]! > offsets[0]!, offsets.join(','))
+  assert.deepEqual(offsets, [cs[0]!.b, cs[1]!.b])
 })
 
 test('tool_call metadata is printed once and excluded from text chunk offsets', () => {

@@ -69,11 +69,12 @@ export interface Adapter {
 
 /** @public PR3 adapter contract */
 export class UnsupportedFormat extends Error {
-  constructor(
-    readonly agent: string,
-    readonly detail: string
-  ) {
+  readonly agent: string
+  readonly detail: string
+  constructor(agent: string, detail: string) {
     super(`${agent}: unsupported session format (${detail})`)
+    this.agent = agent
+    this.detail = detail
   }
 }
 /** @public PR3 adapter contract */

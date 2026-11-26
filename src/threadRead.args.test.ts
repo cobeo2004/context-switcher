@@ -12,7 +12,7 @@ test('thread-read rejects unsafe pagination integers as usage errors', () => {
     ['--limit', '99999999999999999999'],
     ['--after', '99999999999999999999'],
     ['--limit', String(Number.MAX_SAFE_INTEGER)]
-  ]) {
+  ] as const) {
     const result = spawnSync(process.execPath, [cli, 't_test', flag, value], { encoding: 'utf8' })
     assert.equal(result.status, 64, result.stderr)
     assert.ok(result.stderr.includes('usage:'))
