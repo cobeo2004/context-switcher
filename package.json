@@ -11,7 +11,9 @@
     "orca:test": "H=$(mktemp -d) && HOME=$H orca plugin test .",
     "orca:check": "H=$(mktemp -d) && HOME=$H orca plugin check . --json",
     "orca:release": "orca plugin release-entry . --json",
-    "verify": "npm run -s types && npm run -s lint && npm run -s typecheck && npm run -s knip && npm run -s gate:fixtures && npm run -s orca:validate && npm run -s orca:test && npm run -s orca:check && npm run -s orca:release"
+    "scan": "bash scripts/scan.sh all",
+    "verify:code": "npm run -s types && npm run -s lint && npm run -s typecheck && npm run -s knip && npm run -s gate:fixtures && npm run -s orca:validate && npm run -s orca:test && npm run -s orca:check && npm run -s orca:release",
+    "verify": "npm run -s verify:code && npm run -s scan"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
