@@ -5,10 +5,11 @@ import { join } from 'node:path'
 import * as main from './worker'
 import { openStore } from './store'
 import { createIngest } from './ingest'
+import { buildContext } from './context'
 import { claude } from './sources/claude'
 import { codex } from './sources/codex'
 import { LocalSessionSource } from './sources/sessionSource'
-import type { ThreadId } from './types'
+import type { HandoffId, ThreadId } from './types'
 
 const FIXTURES = 'src/sources/fixtures' // orca plugin test runs from the repo root
 const SID = '00000000-0000-4000-8000-0000000000f1'
@@ -155,6 +156,140 @@ test('lazy create: no session before a user turn; the marker turn then joins the
     )
   } finally {
     await t.restore()
+  }
+})
+
+function seedHandoff(
+  s: ReturnType<typeof openStore>,
+  opts: { agent?: string; workspace?: string; status?: string; session?: number } = {}
+) {
+  const now = Date.now()
+  s.db.prepare('INSERT OR IGNORE INTO threads (id, created_at, updated_at) VALUES (?, ?, ?)').run(T, now, now)
+  s.db
+    .prepare(
+      `INSERT INTO handoffs (id, thread_id, source_agent, target_agent, target_session_id, workspace_id, strategy, mode,
+       selected, omitted, bytes, status, created_at, updated_at) VALUES (?, ?, 'codex', ?, ?, ?, 'launch', 'full', 0, 0, 0, ?, ?, ?)`
+    )
+    .run(H, T, opts.agent ?? 'claude', opts.session ?? null, opts.workspace ?? 'ws1', opts.status ?? 'pending', now, now)
+}
+
+function markerFixture(home: string, agent: 'claude' | 'codex'): void {
+  const fixture = readFileSync(join(FIXTURES, agent, 'synthetic', 'session.jsonl'), 'utf8')
+  if (agent === 'claude') {
+    const lines = fixture.trimEnd().split('\n')
+    const meta = lines[1] ?? ''
+    const rest = [lines[0] ?? '', ...lines.slice(2)]
+    writeFileSync(
+      claudeFile(home),
+      [meta, ...rest]
+        .join('\n')
+        .replaceAll('h_00000000-0000-4000-8000-0000000000a2', H)
+        .replaceAll('t_00000000-0000-4000-8000-0000000000a2', T) + '\n'
+    )
+  } else {
+    const dir = join(home, '.codex', 'sessions', '2026', '01', '01')
+    mkdirSync(dir, { recursive: true })
+    writeFileSync(
+      join(dir, `rollout-2026-01-01T00-00-00-${SID}.jsonl`),
+      fixture.replaceAll('h_00000000-0000-4000-8000-0000000000b1', H).replaceAll('t_00000000-0000-4000-8000-0000000000b1', T)
+    )
+  }
+}
+
+test('filtered fixture markers join the target thread for both adapters', async () => {
+  for (const agent of ['claude', 'codex'] as const) {
+    const t = await setup({ agent })
+    try {
+      const seed = t.db()
+      seedHandoff(seed, { agent })
+      seed.close()
+      markerFixture(t.home, agent)
+      await t.done()
+      const s = t.db()
+      assert.equal((s.db.prepare('SELECT thread_id FROM sessions').get() as { thread_id: string }).thread_id, T)
+      assert.equal((s.db.prepare('SELECT status FROM handoffs WHERE id = ?').get(H) as { status: string }).status, 'delivered')
+      assert.equal((s.db.prepare('SELECT source FROM turns WHERE handoff_id = ?').get(H) as { source: string }).source, 'handoff')
+      s.close()
+      assert.deepEqual(
+        t.worker.posts.filter((p) => p.event === 'handoff.changed').map((p) => p.payload),
+        [{ id: H, status: 'delivered' }]
+      )
+    } finally {
+      await t.restore()
+    }
+  }
+})
+
+test('filtered markers do not join a different agent or workspace', async () => {
+  for (const opts of [{ agent: 'codex' }, { workspace: 'other' }]) {
+    const t = await setup()
+    try {
+      const seed = t.db()
+      seedHandoff(seed, opts)
+      seed.close()
+      markerFixture(t.home, 'claude')
+      await t.done()
+      const s = t.db()
+      assert.equal((s.db.prepare('SELECT status FROM handoffs WHERE id = ?').get(H) as { status: string }).status, 'pending')
+      assert.notEqual((s.db.prepare('SELECT thread_id FROM sessions').get() as { thread_id: string }).thread_id, T)
+      s.close()
+    } finally {
+      await t.restore()
+    }
+  }
+})
+
+test('resumed markers bind without moving the session, including after an unread batch and late binding', async () => {
+  for (const [status, batch] of [
+    ['pending', 0],
+    ['pending', 6],
+    ['unconfirmed', 0]
+  ] as const) {
+    const t = await setup()
+    try {
+      const file = claudeFile(t.home)
+      const record = (id: string, content: string) =>
+        JSON.stringify({ type: 'user', uuid: id, version: '2.1.0', message: { role: 'user', content } }) + '\n'
+      writeFileSync(file, record('initial', 'initial request'))
+      await t.done()
+      const s = t.db()
+      const session = s.db.prepare('SELECT id, thread_id FROM sessions').get() as { id: number; thread_id: ThreadId }
+      const now = Date.now()
+      // The hand-off lives in another thread (T), so moving the session there would fail the thread assert below.
+      s.db.prepare('INSERT INTO threads (id, created_at, updated_at) VALUES (?, ?, ?)').run(T, now, now)
+      s.db
+        .prepare(
+          'INSERT INTO handoffs (id, thread_id, source_agent, target_agent, target_session_id, workspace_id, strategy, mode, selected, omitted, bytes, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, 0, 0, ?, ?, ?)'
+        )
+        .run(H, T, 'codex', 'claude', session.id, 'ws1', 'resume', 'full', status, now, now)
+      s.close()
+      assert.notEqual(session.thread_id, T)
+      const marker = `[context-switcher handoff ${H} thread ${T}] synthetic secret`
+      const extra = Array.from({ length: batch }, (_, i) => record(`ordinary-${i}`, `ordinary ${i}`)).join('')
+      writeFileSync(file, readFileSync(file, 'utf8') + extra + record('marker', marker))
+      await t.done()
+      const result = t.db()
+      assert.equal((result.db.prepare('SELECT status FROM handoffs WHERE id = ?').get(H) as { status: string }).status, 'delivered')
+      assert.equal(
+        (result.db.prepare('SELECT thread_id FROM sessions WHERE id = ?').get(session.id) as { thread_id: string }).thread_id,
+        session.thread_id
+      )
+      assert.equal(
+        (result.db.prepare('SELECT source FROM turns WHERE native_id = ?').get('marker#0') as { source: string }).source,
+        'handoff'
+      )
+      const pkg = buildContext(result, {
+        threadId: session.thread_id,
+        target: { agent: 'codex' },
+        budget: 2048,
+        purpose: 'switch',
+        handoffId: H as HandoffId
+      })
+      assert.equal(pkg.text.includes('synthetic secret'), false)
+      result.close()
+    } finally {
+      await t.restore()
+    }
   }
 })
 
