@@ -19,6 +19,12 @@ declare module 'node:sqlite' {
 declare module 'node:fs' {
   export function chmodSync(path: string, mode: number): void
   export function existsSync(path: string): boolean
+  export function readFileSync(path: string): Uint8Array
+  export function readFileSync(path: string, encoding: 'utf8'): string
+  export function readdirSync(
+    path: string,
+    options: { recursive: true; withFileTypes: true }
+  ): { name: string; parentPath: string; isFile(): boolean }[]
   export function mkdirSync(path: string, options?: { recursive?: boolean; mode?: number }): string | undefined
   export function mkdtempSync(prefix: string): string
   export function symlinkSync(target: string, path: string): void
@@ -43,10 +49,13 @@ declare module 'node:fs/promises' {
 declare module 'node:path' {
   export function dirname(path: string): string
   export function join(...parts: string[]): string
+  export function relative(from: string, to: string): string
 }
 
 declare module 'node:os' {
   export function homedir(): string
+  export function hostname(): string
+  export function userInfo(): { username: string }
   export function tmpdir(): string
 }
 
@@ -63,8 +72,19 @@ declare module 'node:child_process' {
   ): { status: number | null; stdout: string; stderr: string }
 }
 
+declare module 'node:zlib' {
+  export function zstdCompressSync(data: Uint8Array): Uint8Array
+  export function zstdDecompressSync(data: Uint8Array): Uint8Array
+}
+
+interface ImportMeta {
+  readonly main: boolean
+}
+
 declare var process: {
   env: Record<string, string | undefined>
+  readonly argv: string[]
+  exitCode: number | undefined
   readonly version: string
   readonly execPath: string
 }
