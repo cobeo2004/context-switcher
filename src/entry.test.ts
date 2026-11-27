@@ -115,3 +115,14 @@ test('proc.run returns stdout and rejects when the program fails', async () => {
   assert.equal(await run(process.execPath, ['-e', 'process.stdout.write("ok")']), 'ok')
   await assert.rejects(run(join(tmpdir(), 'cs-no-such-binary'), []))
 })
+
+test('workspace.changed tells an open panel to re-read switch.state; agent status events do not (each re-read is a new preview)', async () => {
+  await withWorker([], [agent('claude', 5)], async (w) => {
+    const panelPosts = () => w.posts.filter((p) => p.event === 'agents.changed').length
+    const base = panelPosts() // the subscription replays the current context once on mount
+    await w.emit('agent.status.changed', { workspaceId: null, paneKey: 'p', state: 'working', receivedAt: 1 })
+    assert.equal(panelPosts(), base)
+    await w.emit('workspace.changed', { context: null })
+    assert.equal(panelPosts(), base + 1)
+  })
+})

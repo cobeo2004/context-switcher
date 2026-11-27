@@ -130,7 +130,11 @@ export async function start(orca: OrcaWorkerApi, runCli: Run, clock: Clock = rea
       orca.log(`status bar update failed: ${String(error)}`)
     }
   }
-  orca.events.on('workspace.changed', refreshStatus)
+  orca.events.on('workspace.changed', async () => {
+    // Only here, not on agent.status.changed: the panel re-previews (a new draft) on every agents.changed.
+    orca.panels.post('agents.changed', {})
+    await refreshStatus()
+  })
   orca.events.on('agent.status.changed', refreshStatus)
   // Orca also replays the current context to a new `workspace.changed` subscriber; a second identical update is harmless.
   await refreshStatus()
