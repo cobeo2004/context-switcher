@@ -36,7 +36,7 @@ export interface FileId {
 
 /** Per-agent ingest cursor (D3 / recon diff 3). */
 export type Cursor =
-  | { kind: 'offset'; file: FileId; offset: number } // claude, codex (offset in the decompressed stream for .zst)
+  | { kind: 'offset'; file: FileId; offset: number; anchor?: string } // claude, codex (offset in the decompressed stream for .zst)
   | { kind: 'snapshot'; file: FileId; root?: string } // pi (whole-file re-read), cursor (root = latestRootBlobId; equal root + equal file ⇒ skip)
 // Recovery rule (all kinds): stat differs in dev/ino, or size < file.size ⇒ discard the cursor and re-parse from the start.
 // Idempotent native ids (§0.4) make the re-parse safe.
