@@ -16,7 +16,7 @@ const str = (v: unknown) => (typeof v === 'string' ? v : undefined)
 const INJECTED = /^<(task-notification|command-name|command-message|local-command-stdout)>/
 
 const parts = (v: string) => v.split(/[.-]/).map((p) => Number.parseInt(p, 10) || 0)
-const newer = (a: string, b: string) => {
+export const newer = (a: string, b: string) => {
   const [x, y] = [parts(a), parts(b)]
   for (let i = 0; i < Math.max(x.length, y.length); i++) {
     const d = (x[i] ?? 0) - (y[i] ?? 0)
