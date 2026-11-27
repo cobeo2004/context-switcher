@@ -1,0 +1,50 @@
+{
+  "agent": "pi",
+  "count": 11,
+  "turns": [
+    {
+      "nativeId": "02",
+      "kind": "user"
+    },
+    {
+      "nativeId": "03",
+      "kind": "user"
+    },
+    {
+      "nativeId": "04",
+      "kind": "assistant"
+    },
+    {
+      "nativeId": "06",
+      "kind": "toolResult"
+    },
+    {
+      "nativeId": "07",
+      "kind": "bashExecution"
+    },
+    {
+      "nativeId": "08",
+      "kind": "assistant"
+    },
+    {
+      "nativeId": "09",
+      "kind": "user"
+    },
+    {
+      "nativeId": "0a",
+      "kind": "user"
+    },
+    {
+      "nativeId": "00e",
+      "kind": "assistant"
+    },
+    {
+      "nativeId": "010",
+      "kind": "toolResult"
+    },
+    {
+      "nativeId": "011",
+      "kind": "assistant"
+    }
+  ]
+}

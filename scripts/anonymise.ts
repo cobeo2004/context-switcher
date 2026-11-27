@@ -34,8 +34,8 @@ const LITERALS = new Set(
   words(
     'user assistant system summary developer human message text thinking redacted_thinking tool_use tool_result image ' +
       'session_meta event_msg response_item turn_context compacted item_completed UserMessage AgentMessage CommandExecution ' +
-      'FileChange McpToolCall Reasoning commentary final_answer completed failed in_progress add update delete ' +
-      'session model_change thinking_level_change compaction branch_summary toolCall toolResult ' +
+      'FileChange McpToolCall Reasoning Text input_text output_text commentary final_answer completed failed in_progress add update delete ' +
+      'session model_change thinking_level_change compaction branch_summary toolCall toolResult bashExecution ' +
       'Bash Read Edit MultiEdit Write Grep Glob Task TodoWrite WebFetch WebSearch bash read edit write shell apply_patch'
   )
 )
@@ -75,8 +75,8 @@ const SPECS: Record<string, Spec> = {
     keys: roles({
       enum: 'type role name toolName',
       id: 'id parentId toolCallId',
-      scalar: 'version timestamp isError',
-      text: 'message content text thinking cwd arguments summary'
+      scalar: 'version timestamp isError excludeFromContext',
+      text: 'message content text thinking cwd arguments summary command path'
     }),
     turn: (r) => {
       const m = r['message']

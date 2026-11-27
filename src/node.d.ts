@@ -65,6 +65,12 @@ declare module 'node:crypto' {
 }
 
 declare module 'node:child_process' {
+  export function execFile(
+    command: string,
+    args: readonly string[],
+    options: { encoding: 'utf8' },
+    callback: (error: unknown, stdout: string) => void
+  ): void
   export function spawnSync(
     command: string,
     args: readonly string[],

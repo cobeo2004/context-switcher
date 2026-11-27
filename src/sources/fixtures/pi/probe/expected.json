@@ -1,0 +1,70 @@
+{
+  "agent": "pi",
+  "count": 16,
+  "turns": [
+    {
+      "nativeId": "00000004",
+      "kind": "system"
+    },
+    {
+      "nativeId": "00000005",
+      "kind": "user"
+    },
+    {
+      "nativeId": "00000006",
+      "kind": "assistant"
+    },
+    {
+      "nativeId": "00000007",
+      "kind": "user"
+    },
+    {
+      "nativeId": "00000009",
+      "kind": "assistant"
+    },
+    {
+      "nativeId": "0000000c",
+      "kind": "toolResult"
+    },
+    {
+      "nativeId": "0000000d",
+      "kind": "toolResult"
+    },
+    {
+      "nativeId": "0000000e",
+      "kind": "assistant"
+    },
+    {
+      "nativeId": "00000010",
+      "kind": "toolResult"
+    },
+    {
+      "nativeId": "00000011",
+      "kind": "assistant"
+    },
+    {
+      "nativeId": "00000013",
+      "kind": "toolResult"
+    },
+    {
+      "nativeId": "00000014",
+      "kind": "assistant"
+    },
+    {
+      "nativeId": "00000016",
+      "kind": "toolResult"
+    },
+    {
+      "nativeId": "00000017",
+      "kind": "assistant"
+    },
+    {
+      "nativeId": "00000019",
+      "kind": "toolResult"
+    },
+    {
+      "nativeId": "0000001a",
+      "kind": "assistant"
+    }
+  ]
+}

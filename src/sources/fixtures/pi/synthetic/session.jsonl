@@ -1,0 +1,15 @@
+{"type":"session","version":3,"id":"00000000-0000-4000-8000-000000000001","timestamp":"2026-01-01T00:00:00.000Z","cwd":"do amet consectetu"}
+{"type":"message","id":"02","parentId":null,"timestamp":"2026-01-01T00:00:01.000Z","message":{"role":"user","content":[{"type":"text","text":"<system-reminder>elit consectetur l[context-switcher handoff h_00000000-0000-4000-8000-0000000000c1 thread t_00000000-0000-4000-8000-0000000000c1]</system-reminder>"}],"timestamp":1767225601000}}
+{"type":"message","id":"03","parentId":"02","timestamp":"2026-01-01T00:00:02.000Z","message":{"role":"user","content":[{"type":"text","text":"lorem dolor do sit adipiscin"}],"timestamp":1767225602000}}
+{"type":"message","id":"04","parentId":"03","timestamp":"2026-01-01T00:00:03.000Z","message":{"role":"assistant","content":[{"type":"text","text":"elit eiusmod lorem amet dolor elit"},{"type":"toolCall","id":"0000005","name":"bash","arguments":{"command":"lorem consecte"}}],"timestamp":1767225603000}}
+{"type":"message","id":"06","parentId":"04","timestamp":"2026-01-01T00:00:04.000Z","message":{"role":"toolResult","toolCallId":"0000005","toolName":"bash","content":[{"type":"text","text":"consectetur sit "}],"isError":false,"timestamp":1767225604000}}
+{"type":"message","id":"07","parentId":"06","timestamp":"2026-01-01T00:00:05.000Z","message":{"role":"bashExecution","command":"consectetur ","excludeFromContext":false,"timestamp":1767225605000}}
+{"type":"message","id":"08","parentId":"07","timestamp":"2026-01-01T00:00:06.000Z","message":{"role":"assistant","content":[{"type":"text","text":"dolor consectetur sed sed consectetur tem"}],"timestamp":1767225606000}}
+{"type":"message","id":"09","parentId":"08","timestamp":"2026-01-01T00:00:07.000Z","message":{"role":"user","content":[{"type":"text","text":"ipsum amet amet ipsum amet consectetur el"}],"timestamp":1767225607000}}
+{"type":"message","id":"0a","parentId":"04","timestamp":"2026-01-01T00:00:08.000Z","message":{"role":"user","content":[{"type":"text","text":"eiusmod dolor lorem sed sit sed do "}],"timestamp":1767225608000}}
+{"type":"compaction","id":"0b","parentId":"0a","timestamp":"2026-01-01T00:00:09.000Z","summary":"tempor amet ipsum sed consect"}
+{"type":"do sit","id":"00c","parentId":"0b","timestamp":"2026-01-01T00:00:10.000Z"}
+{"type":"consectetur adipi","id":"00d","parentId":"00c","timestamp":"2026-01-01T00:00:11.000Z"}
+{"type":"message","id":"00e","parentId":"00d","timestamp":"2026-01-01T00:00:12.000Z","message":{"role":"assistant","content":[{"type":"toolCall","id":"000000f","name":"read","arguments":{"path":"eiusmod sed dolor adipis"}}],"timestamp":1767225612000}}
+{"type":"message","id":"010","parentId":"00e","timestamp":"2026-01-01T00:00:13.000Z","message":{"role":"toolResult","toolCallId":"000000f","toolName":"read","content":[{"type":"text","text":"do ipsum sed dolor "}],"isError":false,"timestamp":1767225613000}}
+{"type":"message","id":"011","parentId":"010","timestamp":"2026-01-01T00:00:14.000Z","message":{"role":"assistant","content":[{"type":"text","text":"eiusmod ipsum adipiscing consectetur sit "}],"timestamp":1767225614000}}
