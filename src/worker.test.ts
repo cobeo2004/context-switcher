@@ -25,7 +25,8 @@ test('a corrupt database produces one notification and leaves the worker running
       receivedAt: 1,
       sessionId: 's1'
     })
-    assert.equal(host.callsOf('agents.list').length, 0) // store = null: ingest is skipped
+    // store = null: ingest (which lists a named workspace) is skipped; the status bar lists the focused one
+    assert.equal(host.callsOf('agents.list').filter((p) => p !== undefined && 'workspaceId' in (p as object)).length, 0)
     await worker.deactivate()
   } finally {
     process.env['HOME'] = prev

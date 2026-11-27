@@ -11,6 +11,9 @@
   "pluginApi": 1,
   "main": "src/worker.ts",
   "contributes": {
+    "commands": [{ "id": "context-switcher.switch", "title": "Context Switcher: Switch Agent…", "when": "workspace" }],
+    "keybindings": [{ "command": "context-switcher.switch", "key": "Mod+Alt+K", "when": "workspace" }],
+    "statusBarItems": [{ "id": "active-agent", "text": "Agent ▾", "command": "context-switcher.switch" }],
     "events": [{ "on": "agent.status.changed" }, { "on": "workspace.changed" }],
     "panels": [
       {

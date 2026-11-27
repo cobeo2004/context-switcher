@@ -152,7 +152,7 @@ test('lazy create: no session before a user turn; the marker turn then joins the
     s.close()
     assert.deepEqual(
       t.worker.posts.filter((p) => p.event === 'handoff.changed').map((p) => p.payload),
-      [{ id: H, status: 'delivered' }]
+      [{ handoffId: H, status: 'delivered', inInput: false }]
     )
   } finally {
     await t.restore()
@@ -212,7 +212,7 @@ test('filtered fixture markers join the target thread for both adapters', async 
       s.close()
       assert.deepEqual(
         t.worker.posts.filter((p) => p.event === 'handoff.changed').map((p) => p.payload),
-        [{ id: H, status: 'delivered' }]
+        [{ handoffId: H, status: 'delivered', inInput: false }]
       )
     } finally {
       await t.restore()
