@@ -139,7 +139,12 @@ export function openStore(path: string) {
   chmodSync(path, 0o600)
 
   const db = new DatabaseSync(path)
-  db.exec('PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 2000;')
+  try {
+    db.exec('PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 2000;')
+  } catch (error) {
+    db.close()
+    throw error
+  }
 
   // ponytail: no transaction helper in node:sqlite; nested calls are not supported.
   function tx<T>(fn: () => T): T {

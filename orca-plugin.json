@@ -11,6 +11,7 @@
   "pluginApi": 1,
   "main": "src/worker.ts",
   "contributes": {
+    "events": [{ "on": "agent.status.changed" }, { "on": "workspace.changed" }],
     "panels": [
       {
         "id": "switch",
