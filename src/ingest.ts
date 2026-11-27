@@ -46,19 +46,20 @@ export function createIngest(deps: IngestDeps) {
   const warned = new Set<string>()
   let queue = Promise.resolve()
 
-  async function run(evt: StatusEvent): Promise<void> {
+  /** 'unsupported' when the session file could not be parsed (preview must not package stale turns). */
+  async function run(evt: StatusEvent): Promise<'unsupported' | undefined> {
     const store = deps.store()
-    if (!store || evt.state !== 'done' || !evt.terminalId || !evt.workspaceId) return
+    if (!store || evt.state !== 'done' || !evt.terminalId || !evt.workspaceId) return undefined
     const row = (await deps.agents(evt.workspaceId)).find((a) => a.terminalId === evt.terminalId)
     const adapter = ADAPTERS[row?.agent ?? '']
-    if (!adapter) return
+    if (!adapter) return undefined
     const wsId = evt.workspaceListId ?? evt.workspaceId
     const ws = (await deps.workspaces()).find((w) => w.id === wsId)
-    if (ws?.hostId !== 'local') return
+    if (ws?.hostId !== 'local') return undefined
     const sessionId = evt.sessionId ?? row?.sessionId
     if (!sessionId) {
       deps.log(`ingest: no session id yet for terminal ${evt.terminalId}`)
-      return
+      return undefined
     }
 
     const prev: unknown = store.db
@@ -75,7 +76,7 @@ export function createIngest(deps: IngestDeps) {
       const key = `${adapter.agent}:${sessionId}`
       if (!warned.has(key)) deps.log(`ingest: ${e.message}`)
       warned.add(key)
-      return
+      return 'unsupported'
     }
 
     const statusOf = (id: string) => {
@@ -92,16 +93,19 @@ export function createIngest(deps: IngestDeps) {
     for (const w of result.warnings) deps.log(w)
     // Binding is ingest's only status transition (§0.2 rule 3/4).
     for (const [id, was] of before) if (was !== 'delivered' && statusOf(id) === 'delivered') deps.post({ id, status: 'delivered' })
+    return undefined
   }
 
   /** Serialised: one ingest at a time, in event order. Errors are logged, never thrown into Orca. */
-  function onStatus(evt: StatusEvent): Promise<void> {
-    queue = queue
+  function onStatus(evt: StatusEvent): Promise<'unsupported' | undefined> {
+    const done = queue
       .then(() => run(evt))
       .catch((e: unknown) => {
         deps.log(`ingest failed: ${String(e)}`)
+        return undefined
       })
-    return queue
+    queue = done.then(() => undefined)
+    return done
   }
 
   return { onStatus }

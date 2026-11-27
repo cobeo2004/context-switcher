@@ -8,6 +8,7 @@ import { THREAD_READ_MJS } from './cliSource'
 import { createIngest } from './ingest'
 import { run, type Run } from './proc'
 import { openPanel, STATUS_ITEM, statusText, SWITCH_COMMAND } from './entry'
+import { createSwitch, isResumeAgent } from './switch'
 
 const SWEEP_EVERY_MS = 60_000
 
@@ -16,12 +17,24 @@ let sweepTimer: ReturnType<typeof setInterval> | null = null
 
 const mode = (path: string) => (statSync(path).mode & 0o777).toString(8)
 
+interface Clock {
+  now: () => number
+  sleep: (ms: number) => Promise<void>
+}
+const realClock: Clock = {
+  now: Date.now,
+  sleep: (ms) =>
+    new Promise((resolve) => {
+      setTimeout(resolve, ms)
+    })
+}
+
 export default function activate(orca: OrcaWorkerApi): Promise<void> {
   return start(orca, run)
 }
 
-/** `activate` with the process runner passed in, so tests never spawn a real Orca. */
-export async function start(orca: OrcaWorkerApi, runCli: Run): Promise<void> {
+/** `activate` with the process runner and clock passed in, so tests never spawn a real Orca or wait real time. */
+export async function start(orca: OrcaWorkerApi, runCli: Run, clock: Clock = realClock): Promise<void> {
   const notify = async (body: string) => {
     try {
       await orca.host.call('notifications.show', { title: 'Context Switcher', body })
@@ -70,7 +83,41 @@ export async function start(orca: OrcaWorkerApi, runCli: Run): Promise<void> {
       orca.panels.post('handoff.changed', { handoffId: id, status, inInput: false })
     }
   })
-  orca.events.on('agent.status.changed', ingest.onStatus)
+  orca.events.on('agent.status.changed', async (e) => {
+    await ingest.onStatus(e)
+  })
+
+  const switcher = createSwitch({
+    store: () => store,
+    focused: () => orca.host.call('workspace.readContext', undefined),
+    workspaces: async () => (await orca.host.call('workspace.list', undefined)).workspaces,
+    agents: async (workspaceId) => (await orca.host.call('agents.list', workspaceId === undefined ? undefined : { workspaceId })).agents,
+    launch: (workspaceId, agent) => orca.host.call('agent.launch', { workspaceId, agent }),
+    resume: (workspaceId, agent, sessionId) => {
+      if (!isResumeAgent(agent)) throw new Error(`${agent} cannot resume a session`)
+      return orca.host.call('agent.resume', { workspaceId, agent, sessionId })
+    },
+    activate: (workspaceId) => orca.host.call('workspace.open', { workspaceId }),
+    focus: (terminalId) => orca.host.call('terminal.focus', { terminalId }),
+    read: (terminalId) => orca.host.call('terminal.read', { terminalId }),
+    sendText: (terminalId, text, enter) => orca.host.call('terminal.sendText', { terminalId, text, enter }),
+    ingest: ingest.onStatus,
+    budget: async () => {
+      const value = await orca.settings.get('budgetChars')
+      return typeof value === 'number' ? value : null
+    },
+    notify,
+    post: (change) => {
+      orca.panels.post('handoff.changed', change)
+    },
+    runCli,
+    ...clock
+  })
+  orca.events.on('agent.status.changed', switcher.onStatus)
+  orca.panels.handle('switch.state', switcher.state)
+  orca.panels.handle('switch.preview', switcher.preview)
+  orca.panels.handle('switch.run', switcher.run)
+  orca.panels.handle('handoff.get', switcher.get)
 
   orca.commands.register(SWITCH_COMMAND, async () => {
     if (!(await openPanel(runCli))) await notify('Open Context Switcher from the right sidebar')
