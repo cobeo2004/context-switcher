@@ -28,8 +28,8 @@ test('anonymise: claude jsonl round trip keeps record count and kinds, and the o
   assert.equal(r.status, 0, r.stderr)
   assert.ok(![secret, home].some((s) => r.stdout.includes(s) || r.stderr.includes(s)))
   const sentinels = join(home, '.context-switcher', 'fixture-sentinels.txt')
-  assert.equal(statSync(sentinels).mode & 0o777, 0o600)
   const planted = readFileSync(sentinels, 'utf8').split('\n')
+  assert.equal(statSync(sentinels).mode & 0o777, 0o600)
   assert.ok(planted.some((l) => secret.includes(l) && l.length >= 12))
 
   const check = run(home, 'check-fixtures.ts', out)

@@ -1,7 +1,7 @@
 // Fixture anonymiser (plan row 4.3). Usage: node scripts/anonymise.ts --agent claude|codex|pi --in <file> --out <dir>
 // Value allow-list per format: structural values are kept, ids remapped, other strings made synthetic, unknown keys
 // dropped. Prints counts only, never source text.
-import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { createHash } from 'node:crypto'
@@ -197,7 +197,12 @@ function writeSentinels(): number {
   const picked = [...new Set(lines)].sort(() => Math.random() - 0.5).slice(0, 50)
   mkdirSync(dir, { recursive: true, mode: 0o700 })
   chmodSync(dir, 0o700) // mkdir's mode does not apply to a directory that already exists
-  const old = existsSync(file) ? readFileSync(file, 'utf8').split('\n') : []
+  let old: string[] = []
+  try {
+    old = readFileSync(file, 'utf8').split('\n')
+  } catch (e) {
+    if (!(e instanceof Error && 'code' in e && e.code === 'ENOENT')) throw e
+  }
   writeFileSync(file, [...new Set([...old, ...picked])].filter((l) => l !== '').join('\n') + '\n', { mode: 0o600 })
   chmodSync(file, 0o600)
   return picked.length
