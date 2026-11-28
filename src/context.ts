@@ -194,8 +194,8 @@ export function buildContext(store: Store, input: BuildContextInput): ContextPac
   return assemble(turns, input.budget, {
     threadId: input.threadId,
     handoffId: input.handoffId,
-    // ponytail: names the newest eligible turn's agent; list every source agent if mixed threads need it.
-    sourceAgent: turns[turns.length - 1]?.agent ?? 'unknown',
+    // A thread mixes agents after a switch: the header names the one picked, not whoever spoke last.
+    sourceAgent: input.sourceAgent ?? turns[turns.length - 1]?.agent ?? 'unknown',
     mode: input.target.sessionId === undefined ? 'full' : 'delta',
     lossy: false
   })

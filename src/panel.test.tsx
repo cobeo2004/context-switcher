@@ -444,9 +444,7 @@ test('a persisted pending the worker no longer knows is dropped, so Switch is no
   const view = await open({
     requests: {
       ...BASE.requests,
-      'handoff.get': () => {
-        throw new Error('unknown hand-off h_0')
-      }
+      'handoff.get': null
     },
     persisted: { plugin: { 'switch.status': { handoffId: 'h_0', status: 'pending', inInput: false, agent: 'claude' } } }
   })
@@ -501,5 +499,73 @@ test('a settle, then a selection change, then the run reply: the status stays se
   await view.settled()
   assert.equal(view.find({ text: /Pending/ }), null)
   assert.equal(switchButton(view)?.disabled, false)
+  await close(view)
+})
+
+test('a worker not reachable at mount keeps the restored status, and the next load confirms it (live check 8.7)', async () => {
+  let up = false
+  const view = await open({
+    requests: {
+      ...BASE.requests,
+      'handoff.get': () => {
+        if (!up) throw new Error('worker not running')
+        return { status: 'delivered', inInput: false, strategy: 'launch', bytes: 6, chars: 6 }
+      }
+    },
+    persisted: { plugin: { 'switch.status': { handoffId: 'h_0', status: 'pending', inInput: false, agent: 'claude' } } }
+  })
+  assert.ok(view.find({ text: /Pending: delivering to Claude/ }), JSON.stringify(view.tree()))
+  up = true
+  await view.post('agents.changed', {})
+  await view.settled()
+  assert.ok(view.find({ text: /Delivered to/ }), JSON.stringify(view.tree()))
+  await close(view)
+})
+
+test('a late answer for the restored status never replaces a newer event (live check 8.7)', async () => {
+  const stale = { status: 'pending' as const, inInput: false, strategy: 'launch' as const, bytes: 6, chars: 6 }
+  let calls = 0
+  let view: TestPanel | null = null
+  view = await open({
+    requests: {
+      ...BASE.requests,
+      'handoff.get': async () => {
+        calls += 1
+        if (calls === 1) throw new Error('worker not running') // mount: the status stays restored
+        // The settle event lands while this answer is still on its way.
+        void view?.post('handoff.changed', { handoffId: 'h_0', status: 'failed', inInput: false, error: 'boom' })
+        await new Promise((resolve) => setTimeout(resolve, 10))
+        return stale
+      }
+    },
+    persisted: { plugin: { 'switch.status': { handoffId: 'h_0', status: 'pending', inInput: false, agent: 'claude' } } }
+  })
+  await view.post('agents.changed', {})
+  await view.settled()
+  assert.equal(calls, 2)
+  assert.ok(view.find({ text: /boom/ }), JSON.stringify(view.tree()))
+  await close(view)
+})
+
+test('when the source first appears, the target is another agent, not the one picked while there was none (live check 8.7)', async () => {
+  let calls = 0
+  const view = await open({
+    requests: {
+      ...BASE.requests,
+      'switch.state': () => (++calls === 1 ? { ...STATE, sources: [], defaultSource: null } : STATE)
+    }
+  })
+  await view.post('agents.changed', {})
+  await view.settled()
+  assert.equal(view.find({ type: 'Select', label: 'To' })?.props['value'], 'cursor', JSON.stringify(view.tree()))
+  await close(view)
+})
+
+test('a target the user picked survives a reload while the source stays (live check 8.7)', async () => {
+  const view = await open(BASE)
+  await view.select({ type: 'Select', label: 'To' }, 'claude')
+  await view.post('agents.changed', {})
+  await view.settled()
+  assert.equal(view.find({ type: 'Select', label: 'To' })?.props['value'], 'claude')
   await close(view)
 })

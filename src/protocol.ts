@@ -51,10 +51,10 @@ declare module 'orca' {
       input: { handoffId: string }
       output: { ok: true; handoffId: string; status: 'pending' } | { ok: false; code: 'expired' | 'already_run' | 'unknown' }
     }
-    /** A hand-off's current state (e2e polling, the panel on reopen). */
+    /** A hand-off's current state (e2e polling, the panel on reopen); null when the store does not know it. */
     'handoff.get': {
       input: { handoffId: string }
-      output: { status: HandoffStatus; inInput: boolean; error?: string; strategy: Strategy; bytes: number; chars: number }
+      output: { status: HandoffStatus; inInput: boolean; error?: string; strategy: Strategy; bytes: number; chars: number } | null
     }
   }
   interface PluginPanelEvents {

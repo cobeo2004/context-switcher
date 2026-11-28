@@ -383,7 +383,8 @@ test('run twice → already_run with one launch; run after the draft TTL → exp
     assert.equal(s.host.callsOf('agent.launch').length, 1)
     assert.deepEqual(await s.worker.request('switch.run', { handoffId: 'h_missing' }), { ok: false, code: 'unknown' })
     const got = await s.worker.request('handoff.get', { handoffId: p.handoffId })
-    assert.deepEqual([got.status, got.strategy, got.chars], ['pending', 'launch', p.sent.length])
+    assert.deepEqual([got?.status, got?.strategy, got?.chars], ['pending', 'launch', p.sent.length])
+    assert.equal(await s.worker.request('handoff.get', { handoffId: 'h_missing' }), null)
   } finally {
     await s.restore()
   }

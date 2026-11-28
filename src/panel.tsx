@@ -80,13 +80,43 @@ async function preview(): Promise<void> {
   }
 }
 
+/** The status restored at mount, until the worker has answered for it. */
+let restored: Status | null = null
+
+/** Re-reads the restored status. An unreachable worker (still loading, awaiting approval) leaves it for the next load. */
+async function verify(): Promise<void> {
+  const last = restored
+  if (!last) return
+  let g: PluginRequestOutput<'handoff.get'>
+  try {
+    g = await plugin.request('handoff.get', { handoffId: last.handoffId })
+  } catch {
+    return
+  }
+  if (restored === last) restored = null
+  if (read(statusA) !== last) return // a newer event or a press replaced it: that one is current
+  // Unknown to the store (DB reset): a restored pending would otherwise block Switch forever.
+  set(
+    statusA,
+    g === null
+      ? null
+      : toStatus(
+          { handoffId: last.handoffId, status: g.status, inInput: g.inInput, ...(g.error === undefined ? {} : { error: g.error }) },
+          last.agent
+        )
+  )
+}
+
 async function load(): Promise<void> {
+  void verify()
   try {
     const s = await plugin.request('switch.state')
     set(stateA, s)
     const source =
       s.sources.find((x) => x.terminalId === read(sourceA)) ?? s.sources.find((x) => x.terminalId === s.defaultSource) ?? s.sources[0]
-    const keep = s.targets.find((t) => t.agent === read(targetA) && t.deliverable)
+    // Keep the picked target, unless the source moved to that same agent (a switch to itself is never the default).
+    const sameSource = (source?.terminalId ?? '') === read(sourceA)
+    const keep = s.targets.find((t) => t.agent === read(targetA) && t.deliverable && (sameSource || t.agent !== source?.agent))
     const pick = keep ?? s.targets.find((t) => t.deliverable && t.agent !== source?.agent) ?? s.targets.find((t) => t.deliverable)
     const changed = (source?.terminalId ?? '') !== read(sourceA) || (pick?.agent ?? '') !== read(targetA)
     set(sourceA, source?.terminalId ?? '')
@@ -157,37 +187,13 @@ function onChanged(c: Changed): void {
 }
 
 export function setup(ctx: PanelContext): void {
+  restored = read(statusA)
   ctx.subscriptions.push(
     plugin.on('handoff.changed', onChanged),
     plugin.on('agents.changed', () => {
       void load()
     })
   )
-  const last = read(statusA)
-  if (last) {
-    plugin
-      .request('handoff.get', { handoffId: last.handoffId })
-      .then((g) => {
-        const now = read(statusA)
-        if (now?.handoffId !== last.handoffId) return
-        set(
-          statusA,
-          toStatus(
-            {
-              handoffId: last.handoffId,
-              status: g.status,
-              inInput: g.inInput,
-              ...(g.error === undefined ? {} : { error: g.error })
-            },
-            last.agent
-          )
-        )
-      })
-      .catch(() => {
-        // The worker no longer knows it (DB reset, store unavailable): a persisted pending would block Switch forever.
-        if (read(statusA)?.handoffId === last.handoffId) set(statusA, null)
-      })
-  }
   void load()
 }
 

@@ -168,6 +168,8 @@ export interface BuildContextInput {
   budget: number
   purpose: 'switch' | 'delegate'
   handoffId: HandoffId
+  /** The agent the user switches from; names the header. Defaults to the newest turn's agent. */
+  sourceAgent?: string
 }
 export interface ContextPackage {
   text: string // exactly what is delivered

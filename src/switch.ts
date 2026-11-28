@@ -179,7 +179,8 @@ export function createSwitch(deps: SwitchDeps) {
       target: strategy === 'resume' && there ? { agent: target.agent, sessionId: there.id } : { agent: target.agent },
       budget,
       purpose: 'switch',
-      handoffId
+      handoffId,
+      sourceAgent: src.agent
     })
     const now = deps.now()
     store.createDraft(
@@ -211,7 +212,7 @@ export function createSwitch(deps: SwitchDeps) {
   function get(input: { handoffId: string }) {
     const store = deps.store()
     const h = store && rowOf(store, input.handoffId)
-    if (!h) throw new Error(`unknown hand-off ${input.handoffId}`)
+    if (!h) return null
     return {
       status: h.status,
       inInput: h.in_input === 1,

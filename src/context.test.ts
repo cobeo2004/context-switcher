@@ -216,3 +216,11 @@ test('header and footer verbatim, lossy line when lossy, selectedTurnIds match t
   assert.deepEqual(lossy.selectedTurnIds, [])
   assert.equal(lossy.lossy, true)
 })
+
+test('the header names the agent picked as the source, not whoever spoke last in the thread', () => {
+  const s = fresh()
+  const r = s.ingestParse({ agent: 'claude', nativeId: 'A' }, parse([t('a0', 'user', 'hi'), t('a1', 'assistant', 'hello')]), WS)
+  const thread = must(r.threadId)
+  assert.ok(buildContext(s, input(thread)).text.includes('Context hand-off from claude '))
+  assert.ok(buildContext(s, { ...input(thread), sourceAgent: 'codex' }).text.includes('Context hand-off from codex '))
+})
