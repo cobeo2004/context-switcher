@@ -40,7 +40,7 @@ export interface SwitchDeps {
 // v0.1 adapter agents (ingest.ts ADAPTERS): their hand-off is delivered when ingest binds the marker.
 const ADAPTER_AGENTS = new Set(['claude', 'codex'])
 const STATIC_TARGETS = ['claude', 'codex', 'pi', 'cursor', 'antigravity', 'opencode']
-/** `agent.resume`'s enum ([HA]) minus pi and prime-agent, which cannot resume by id ([RE]). */
+/** `agent.resume`'s enum ([HA]; Orca 1.4.280 dropped gemini) minus pi and prime-agent, which cannot resume by id ([RE]). */
 const RESUME_AGENTS = [
   'claude',
   'codebuddy',
@@ -48,7 +48,6 @@ const RESUME_AGENTS = [
   'qoder',
   'qoder-cn',
   'qwen-code',
-  'gemini',
   'antigravity',
   'opencode',
   'opencode2',
