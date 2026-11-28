@@ -49,16 +49,30 @@ export function createIngest(deps: IngestDeps) {
   /** 'unsupported' when the session file could not be parsed (preview must not package stale turns). */
   async function run(evt: StatusEvent): Promise<'unsupported' | undefined> {
     const store = deps.store()
-    if (!store || evt.state !== 'done' || !evt.terminalId || !evt.workspaceId) return undefined
-    const row = (await deps.agents(evt.workspaceId)).find((a) => a.terminalId === evt.terminalId)
-    const adapter = ADAPTERS[row?.agent ?? '']
-    if (!adapter) return undefined
+    if (!store || evt.state !== 'done') return undefined
+    // Live events carry an identity-form workspaceId; agents.list, workspace.list and every stored row (hand-offs
+    // included, so the marker join matches) use the workspace.list id, which the event gives as workspaceListId.
     const wsId = evt.workspaceListId ?? evt.workspaceId
+    // Skips are logged with ids only (never content), so a live event that ingests nothing says why.
+    if ((!evt.terminalId && !evt.sessionId) || !wsId) {
+      deps.log(`ingest: skipped done (terminal ${evt.terminalId ?? 'none'}, workspace ${wsId ?? 'none'})`)
+      return undefined
+    }
+    // Live events often name no terminal (Orca names it only "when it lists it"); the session id then finds the row.
+    const rows = await deps.agents(wsId)
+    const row = evt.terminalId ? rows.find((a) => a.terminalId === evt.terminalId) : rows.find((a) => a.sessionId === evt.sessionId)
+    if (!row) {
+      deps.log(`ingest: no agent in workspace ${wsId} matches terminal ${evt.terminalId ?? 'none'} / its session`)
+      return undefined
+    }
+    const adapter = ADAPTERS[row.agent ?? '']
+    if (!adapter) return undefined // an agent without an adapter (yet): nothing to read
     const ws = (await deps.workspaces()).find((w) => w.id === wsId)
+    if (!ws) deps.log(`ingest: workspace ${wsId} is not in workspace.list`)
     if (ws?.hostId !== 'local') return undefined
-    const sessionId = evt.sessionId ?? row?.sessionId
+    const sessionId = evt.sessionId ?? row.sessionId
     if (!sessionId) {
-      deps.log(`ingest: no session id yet for terminal ${evt.terminalId}`)
+      deps.log(`ingest: no session id yet for terminal ${row.terminalId ?? 'none'}`)
       return undefined
     }
 
@@ -86,8 +100,8 @@ export function createIngest(deps: IngestDeps) {
     // One entry per hand-off: several records may carry the same marker.
     const before = new Map(parse.markers.map((m) => [m.handoffId, statusOf(m.handoffId)] as const))
     const result = store.ingestParse({ agent: adapter.agent, nativeId: sessionId }, parse, {
-      workspaceId: evt.workspaceId,
-      terminalId: evt.terminalId,
+      workspaceId: wsId,
+      terminalId: evt.terminalId ?? row.terminalId,
       sourcePath: path
     })
     for (const w of result.warnings) deps.log(w)

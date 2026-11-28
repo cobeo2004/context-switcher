@@ -83,9 +83,6 @@ export async function start(orca: OrcaWorkerApi, runCli: Run, clock: Clock = rea
       orca.panels.post('handoff.changed', { handoffId: id, status, inInput: false })
     }
   })
-  orca.events.on('agent.status.changed', async (e) => {
-    await ingest.onStatus(e)
-  })
 
   const switcher = createSwitch({
     store: () => store,
@@ -113,7 +110,6 @@ export async function start(orca: OrcaWorkerApi, runCli: Run, clock: Clock = rea
     runCli,
     ...clock
   })
-  orca.events.on('agent.status.changed', switcher.onStatus)
   orca.panels.handle('switch.state', switcher.state)
   orca.panels.handle('switch.preview', switcher.preview)
   orca.panels.handle('switch.run', switcher.run)
@@ -135,7 +131,27 @@ export async function start(orca: OrcaWorkerApi, runCli: Run, clock: Clock = rea
     orca.panels.post('agents.changed', {})
     await refreshStatus()
   })
-  orca.events.on('agent.status.changed', refreshStatus)
+  // One subscription fans out to delivery, ingest and the status bar (a host need not stack handlers per event).
+  let statusEvents = 0
+  let lastStatus: {
+    state: string
+    workspaceId: string | null
+    workspaceListId: string | null
+    terminalId: string | null
+    sessionId: boolean
+  } | null = null
+  orca.events.on('agent.status.changed', async (e) => {
+    statusEvents += 1
+    lastStatus = {
+      state: e.state,
+      workspaceId: e.workspaceId,
+      workspaceListId: e.workspaceListId ?? null,
+      terminalId: e.terminalId ?? null,
+      sessionId: e.sessionId !== undefined
+    }
+    switcher.onStatus(e)
+    await Promise.all([ingest.onStatus(e), refreshStatus()])
+  })
   // Orca also replays the current context to a new `workspace.changed` subscriber; a second identical update is harmless.
   await refreshStatus()
 
@@ -152,7 +168,9 @@ export async function start(orca: OrcaWorkerApi, runCli: Run, clock: Clock = rea
       userVersion: s.userVersion(),
       cliInstalled: existsSync(cliPath),
       dirMode: mode(dir),
-      dbMode: mode(dbPath)
+      dbMode: mode(dbPath),
+      statusEvents, // ids and state only, never content: what a live event looked like when nothing ingests
+      lastStatus
     }
   })
 }

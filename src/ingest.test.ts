@@ -29,7 +29,9 @@ async function setup(opts: { agent?: string; hostId?: string } = {}) {
   const host = mockHost({
     settings: { retentionDays: 90 },
     results: {
-      'agents.list': { agents: [{ terminalId: 'term1', title: null, agent: opts.agent ?? 'claude', state: 'done', stateStartedAt: 0 }] },
+      'agents.list': {
+        agents: [{ terminalId: 'term1', title: null, agent: opts.agent ?? 'claude', state: 'done', stateStartedAt: 0, sessionId: SID }]
+      },
       'workspace.list': {
         workspaces: [{ id: 'ws1', kind: 'folder', name: 'proj', path: CWD, branch: null, hostId: opts.hostId ?? 'local' }],
         truncated: false
@@ -319,4 +321,65 @@ test('an unknown format is logged once per resolved session, whichever terminal 
   await done('term2') // sb on another terminal: not logged again
   store.close()
   assert.equal(logs.filter((m) => m.startsWith('ingest: ')).length, 2, logs.join(' | '))
+})
+
+test('a live event with an identity-form workspaceId ingests under its workspaceListId (8.7 live finding)', async () => {
+  const home = mkdtempSync(join(tmpdir(), 'cs-home-'))
+  const prev = process.env['HOME']
+  process.env['HOME'] = home
+  const host = mockHost({
+    settings: { retentionDays: 90 },
+    results: {
+      // Like the real host: agents.list knows the workspace only by its workspace.list id.
+      'agents.list': (p: { workspaceId?: string } | undefined) => ({
+        agents: p?.workspaceId === 'ws1' ? [{ terminalId: 'term1', title: null, agent: 'claude', state: 'done', stateStartedAt: 0 }] : []
+      }),
+      'workspace.list': {
+        workspaces: [{ id: 'ws1', kind: 'folder', name: 'proj', path: CWD, branch: null, hostId: 'local' }],
+        truncated: false
+      }
+    }
+  })
+  const worker = await mountWorker(main, { host })
+  try {
+    copy(join(FIXTURES, 'claude', 'synthetic', 'session.jsonl'), claudeFile(home))
+    await worker.emit('agent.status.changed', {
+      workspaceId: 'identity:wt2:local:00000000-0000-4000-8000-000000000001',
+      workspaceListId: 'ws1',
+      paneKey: 'p1',
+      terminalId: 'term1',
+      state: 'done',
+      receivedAt: Date.now(),
+      sessionId: SID
+    })
+    const s = openStore(join(home, '.context-switcher', 'context.sqlite'))
+    const row = s.db.prepare('SELECT workspace_id FROM sessions').get() as { workspace_id: string } | undefined
+    const turns = (s.db.prepare('SELECT count(*) AS n FROM turns').get() as { n: number }).n
+    s.close()
+    assert.equal(row?.workspace_id, 'ws1') // the id hand-offs store, so a marker can join
+    assert.ok(turns > 0)
+  } finally {
+    await worker.deactivate()
+    process.env['HOME'] = prev
+  }
+})
+
+test('a live done that names no terminal finds its agent by session id (8.7 live finding)', async () => {
+  const t = await setup()
+  try {
+    copy(join(FIXTURES, 'claude', 'synthetic', 'session.jsonl'), claudeFile(t.home))
+    // Like a git-worktree agent's real events: no terminalId, the session id, and an agents.list row that has both.
+    await t.worker.emit('agent.status.changed', { workspaceId: 'ws1', paneKey: 'p1', state: 'working', receivedAt: Date.now() })
+    assert.equal(t.count('turns'), 0)
+    await t.worker.emit('agent.status.changed', {
+      workspaceId: 'ws1',
+      paneKey: 'p1',
+      state: 'done',
+      receivedAt: Date.now(),
+      sessionId: SID
+    })
+    assert.ok(t.count('turns') > 0)
+  } finally {
+    await t.restore()
+  }
 })

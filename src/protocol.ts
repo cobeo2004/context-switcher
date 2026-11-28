@@ -15,6 +15,14 @@ declare module 'orca' {
         cliInstalled: boolean
         dirMode: string
         dbMode: string
+        statusEvents: number
+        lastStatus: {
+          state: string
+          workspaceId: string | null
+          workspaceListId: string | null
+          terminalId: string | null
+          sessionId: boolean
+        } | null
       }
     }
     /** R3/R4: the focused workspace, its agents (sources) and where a switch can go (targets). */
